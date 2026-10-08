@@ -1,0 +1,45 @@
+name: Ventilation Verification CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Verification (Tests, TypeScript Lint, Build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Clean install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run test suite (npm test)
+        run: npm test
+
+      - name: Run TypeScript typecheck / linter (npm run lint)
+        run: npm run lint
+
+      - name: Run production build (npm run build)
+        run: npm run build
+
+      - name: Report verification summary
+        run: |
+          echo "================================================="
+          echo "  CI RELEASE GATE: VERIFICATION PASSED"
+          echo "================================================="
+          echo "  ✓ tests: PASSED (npm test)"
+          echo "  ✓ TypeScript: PASSED (npm run lint)"
+          echo "  ✓ build: PASSED (npm run build)"
+          echo "================================================="

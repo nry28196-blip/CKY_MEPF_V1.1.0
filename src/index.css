@@ -1,0 +1,719 @@
+@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "katex/dist/katex.min.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Bahnschrift", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Bahnschrift", ui-monospace, SFMono-Regular, monospace;
+  --font-khmer: "Battambang", "Khmer OS Battambang", sans-serif;
+}
+
+.font-khmer {
+  font-family: var(--font-khmer) !important;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* High Contrast Light Mode & Dark Mode System */
+.app-theme-dark {
+    /* Default dark styling variables are managed by Tailwind */
+    color-scheme: dark; /* Example property to clear the warning */
+}
+.app-theme-light {
+  /* Redefine Tailwind's default slate variables for premium High-Contrast Light Mode */
+  --color-slate-950: #ffffff; /* Page Background -> Pure White */
+  --color-slate-900: #f8fafc; /* Card & Container Background -> Extra Light Gray */
+  --color-slate-850: #f1f5f9; /* Inner list/table Background -> Soft Light Gray */
+  --color-slate-800: #94a3b8; /* Main borders -> High contrast gray */
+  --color-slate-700: #64748b; /* Strong border/inactive element -> Slate-500 */
+  --color-slate-600: #475569; /* Muted texts -> Slate-600 (highly legible) */
+  --color-slate-500: #334155; /* Normal labels -> Slate-700 */
+  --color-slate-400: #1e293b; /* Primary labels -> Slate-800 */
+  --color-slate-300: #0f172a; /* Body text -> Slate-900 */
+  --color-slate-200: #020617; /* Strong subheadings -> Slate-950 */
+  --color-slate-100: #020617; /* Main page headings -> Slate-950 */
+
+  /* Ensure maximum global contrast */
+  color: #0f172a !important;
+}
+
+/* High contrast inputs, selects & form controls */
+.app-theme-light input,
+.app-theme-light select,
+.app-theme-light textarea {
+  background-color: #ffffff !important;
+  color: #020617 !important;
+  border-color: #64748b !important; /* Force high-contrast border lines */
+  border-width: 1px !important;
+}
+
+/* Global Transition & Tactile System for Inputs and Buttons */
+input, select, textarea, button {
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), 
+              background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Hover scales and border enhancements for tactile inputs */
+input:hover, select:hover, textarea:hover {
+  border-color: #475569 !important;
+}
+
+.app-theme-light input:hover,
+.app-theme-light select:hover,
+.app-theme-light textarea:hover {
+  border-color: #334155 !important;
+}
+
+/* Focus outline overrides and gorgeous high-performance shadows */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  transform: translateY(-1px);
+}
+
+/* Dark mode specific input glowing focus */
+.app-theme-dark input:focus,
+.app-theme-dark select:focus,
+.app-theme-dark textarea:focus,
+:not(.app-theme-light) input:focus,
+:not(.app-theme-light) select:focus,
+:not(.app-theme-light) textarea:focus {
+  border-color: #38bdf8 !important; /* sky-400 */
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+}
+
+/* Light mode specific input glowing focus */
+.app-theme-light input:focus,
+.app-theme-light select:focus,
+.app-theme-light textarea:focus {
+  border-color: #2563eb !important; /* blue-600 */
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3) !important;
+}
+
+/* High tactility tactile press effect for buttons */
+button:active {
+  transform: scale(0.96) !important;
+}
+
+/* Focus rings on accessible focus-visible key actions */
+button:focus-visible {
+  outline: none !important;
+}
+
+.app-theme-dark button:focus-visible,
+:not(.app-theme-light) button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.4) !important;
+}
+
+.app-theme-light button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4) !important;
+}
+
+/* High contrast table styles */
+.app-theme-light th {
+  background-color: #f1f5f9 !important;
+  color: #020617 !important;
+  border-color: #94a3b8 !important;
+  font-weight: 700 !important;
+}
+
+.app-theme-light td {
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+/* Force legend & helper text to stay readable */
+.app-theme-light p,
+.app-theme-light span,
+.app-theme-light label {
+  text-shadow: none !important;
+}
+
+/* Fix elements with .text-white when on light backgrounds */
+.app-theme-light .text-white {
+  color: #020617 !important;
+}
+
+/* Maintain crisp white text inside accent badges, key action buttons and status pill labels */
+.app-theme-light .bg-sky-600 .text-white,
+.app-theme-light .bg-emerald-600 .text-white,
+.app-theme-light .bg-amber-600 .text-white,
+.app-theme-light .bg-red-600 .text-white,
+.app-theme-light .bg-sky-600,
+.app-theme-light .bg-sky-500,
+.app-theme-light .bg-emerald-600,
+.app-theme-light .bg-amber-600,
+.app-theme-light .bg-red-600,
+.app-theme-light button.bg-sky-600 *,
+.app-theme-light button.bg-emerald-600 *,
+.app-theme-light button.bg-amber-600 *,
+.app-theme-light button.bg-red-600 *,
+.app-theme-light .bg-gradient-to-tr *,
+.app-theme-light .bg-sky-600 * {
+  color: #ffffff !important;
+}
+
+/* Backdrop shadow adjustment for modal layering in light mode */
+.app-theme-light .bg-slate-950\/85 {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+}
+
+/* Hide dark-mode background ambient decorative orbs */
+.app-theme-light .bg-emerald-500\/5,
+.app-theme-light .bg-sky-500\/5 {
+  display: none !important;
+}
+
+/* Handle scrollbars elegantly in high-contrast light mode */
+.app-theme-light ::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+
+.app-theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 4px;
+}
+
+.app-theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+/* ==========================================================
+   GOOGLE AI PRO (GEMINI ADVANCED) PREMIUM STYLE SYSTEM
+   ========================================================== */
+
+/* Main Premium Multi-color Gradient Border (Gemini Core Theme) */
+.google-pro-gradient-border {
+  position: relative;
+  background-clip: padding-box !important;
+  border: 1px solid transparent !important;
+}
+
+.google-pro-gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px; /* Perfect precise border width */
+  background: linear-gradient(135deg, 
+    #3b82f6 0%,   /* Royal Blue */
+    #6366f1 25%,  /* Indigo */
+    #8b5cf6 50%,  /* Purple */
+    #d946ef 75%,  /* Magenta */
+    #ec4899 100%  /* Pink */
+  );
+/* Existing webkit prefixed property */
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  
+  /* Add this standard fallback property */
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); 
+  
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Subtle outer glow for Pro components to give premium depth */
+.google-pro-glow {
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.15),
+              0 1px 3px rgba(99, 102, 241, 0.05) !important;
+}
+
+/* Light mode adjustments for the premium gradient border to keep high contrast */
+.app-theme-light .google-pro-gradient-border::before {
+  background: linear-gradient(135deg, 
+    #2563eb 0%,   /* Strong Blue */
+    #4f46e5 25%,  /* Strong Indigo */
+    #7c3aed 50%,  /* Strong Violet */
+    #c084fc 75%,  /* Purple */
+    #db2777 100%  /* Rose */
+  );
+  opacity: 0.95;
+}
+
+/* Sub-discipline glowing colored borders for cards and sections */
+.google-pro-border-emerald {
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.03) !important;
+}
+.google-pro-border-emerald:hover {
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.08) !important;
+}
+
+.google-pro-border-amber {
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.03) !important;
+}
+.google-pro-border-amber:hover {
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.08) !important;
+}
+
+.google-pro-border-cyan {
+  border: 1px solid rgba(6, 182, 212, 0.35) !important;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.03) !important;
+}
+.google-pro-border-cyan:hover {
+  border-color: rgba(6, 182, 212, 0.6) !important;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.08) !important;
+}
+
+.google-pro-border-red {
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.03) !important;
+}
+.google-pro-border-red:hover {
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.08) !important;
+}
+
+/* Override general border utilities in dark mode to inject subtle colored accents instead of plain dark borders */
+.app-theme-dark .border-slate-850,
+:not(.app-theme-light) .border-slate-850 {
+  border-color: rgba(99, 102, 241, 0.18) !important; /* Elegant indigo-tinted lines */
+}
+
+.app-theme-dark .border-slate-800,
+:not(.app-theme-light) .border-slate-800 {
+  border-color: rgba(99, 102, 241, 0.22) !important; /* Elegant indigo-tinted lines */
+}
+
+.app-theme-dark .border-slate-900,
+:not(.app-theme-light) .border-slate-900 {
+  border-color: rgba(15, 23, 42, 0.9) !important;
+}
+
+/* Light mode border improvements with elegant color tone */
+.app-theme-light .border-slate-850 {
+  border-color: #cbd5e1 !important;
+}
+.app-theme-light .border-slate-800 {
+  border-color: #94a3b8 !important;
+}
+.app-theme-light .border-slate-900 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Beautiful dynamic background subtle flow for main grid */
+@keyframes shimmer-border {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.google-pro-animated-gradient::before {
+  background: linear-gradient(135deg, 
+    #3b82f6, #8b5cf6, #ec4899, #f43f5e, #3b82f6
+  ) !important;
+  background-size: 300% 300% !important;
+  animation: shimmer-border 8s ease infinite !important;
+}
+
+@theme {
+  --color-slate-1000: #020617;
+}
+
+/* 
+  Light Mode Global Theme Override 
+  Since the app uses hardcoded dark colors (e.g. bg-slate-900), 
+  we map the dark colors to light colors when in .app-theme-light.
+*/
+.app-theme-light {
+  /* Slate reversed */
+  --color-slate-950: #f8fafc;
+  --color-slate-900: #f1f5f9;
+  --color-slate-850: #e2e8f0;
+  --color-slate-800: #e2e8f0;
+  --color-slate-700: #cbd5e1;
+  --color-slate-600: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-400: #475569;
+  --color-slate-300: #334155;
+  --color-slate-200: #1e293b;
+  --color-slate-100: #0f172a;
+  --color-slate-50: #020617;
+
+  /* Accent colors shifted for light mode */
+  --color-emerald-400: #059669; /* emerald-600 */
+  --color-emerald-500: #10b981; /* emerald-500 */
+  --color-emerald-950: #d1fae5; /* emerald-100 */
+  --color-emerald-900: #a7f3d0; /* emerald-200 */
+
+  --color-sky-400: #0284c7; /* sky-600 */
+  --color-sky-500: #0ea5e9; /* sky-500 */
+  --color-sky-950: #e0f2fe; /* sky-100 */
+  --color-sky-900: #bae6fd; /* sky-200 */
+
+  --color-amber-400: #d97706; /* amber-600 */
+  --color-amber-500: #f59e0b; /* amber-500 */
+  --color-amber-950: #fef3c7; /* amber-100 */
+  --color-amber-900: #fde68a; /* amber-200 */
+
+  --color-cyan-400: #0891b2; /* cyan-600 */
+  --color-cyan-500: #06b6d4; /* cyan-500 */
+  --color-cyan-950: #cffafe; /* cyan-100 */
+  --color-cyan-900: #a5f3fc; /* cyan-200 */
+
+  --color-red-400: #e11d48; /* rose-600 / red-600 */
+  --color-red-500: #ef4444; /* red-500 */
+  --color-red-950: #fee2e2; /* red-100 */
+  --color-red-900: #fecaca; /* red-200 */
+
+  --color-rose-400: #e11d48; /* rose-600 */
+  --color-rose-500: #f43f5e; /* rose-500 */
+  --color-rose-950: #ffe4e6; /* rose-100 */
+
+  --color-indigo-400: #4f46e5; /* indigo-600 */
+  --color-indigo-500: #6366f1; /* indigo-500 */
+  --color-indigo-950: #e0e7ff; /* indigo-100 */
+
+  --color-white: #020617; /* Invert pure white to slate-950 */
+  --color-black: #ffffff; /* Invert pure black to white */
+}
+
+/* Global Number Input Overrides */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield; /* Add this standard property */
+    text-align: center;
+}
+
+/* Reduced Motion Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Micro-interaction button elevation and press responses */
+.btn-micro-action {
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              filter 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-micro-action:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.btn-micro-action:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Print Mode for PDF Export: Clean White Background, High-Contrast Typography & Ink-Friendly Borders */
+.pdf-print-mode {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.pdf-print-mode * {
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+.pdf-print-mode div,
+.pdf-print-mode section,
+.pdf-print-mode article,
+.pdf-print-mode table,
+.pdf-print-mode th,
+.pdf-print-mode td {
+  border-color: #cbd5e1 !important;
+}
+
+.pdf-print-mode .bg-slate-950,
+.pdf-print-mode .bg-slate-900,
+.pdf-print-mode .bg-slate-900\/60,
+.pdf-print-mode .bg-slate-900\/80,
+.pdf-print-mode .bg-slate-900\/90,
+.pdf-print-mode .bg-slate-850,
+.pdf-print-mode [class*="bg-[#090F22]"],
+.pdf-print-mode [class*="bg-[#0B132B]"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.pdf-print-mode .bg-slate-950\/60,
+.pdf-print-mode .bg-slate-950\/40,
+.pdf-print-mode .bg-slate-950\/80 {
+  background-color: #f8fafc !important;
+}
+
+.pdf-print-mode .text-white,
+.pdf-print-mode .text-slate-100 {
+  color: #020617 !important;
+}
+
+.pdf-print-mode .text-slate-200,
+.pdf-print-mode .text-slate-300 {
+  color: #0f172a !important;
+}
+
+.pdf-print-mode .text-slate-400,
+.pdf-print-mode .text-slate-500 {
+  color: #334155 !important;
+}
+
+.pdf-print-mode .text-cyan-400,
+.pdf-print-mode .text-cyan-300 {
+  color: #0284c7 !important;
+}
+
+.pdf-print-mode .text-emerald-400,
+.pdf-print-mode .text-emerald-300 {
+  color: #15803d !important;
+}
+
+.pdf-print-mode .text-amber-400,
+.pdf-print-mode .text-amber-300 {
+  color: #b45309 !important;
+}
+
+.pdf-print-mode .border-slate-800,
+.pdf-print-mode .border-slate-850,
+.pdf-print-mode .border-slate-700 {
+  border-color: #cbd5e1 !important;
+}
+
+.pdf-print-mode .bg-cyan-950,
+.pdf-print-mode .bg-cyan-950\/50,
+.pdf-print-mode .bg-cyan-950\/60,
+.pdf-print-mode .bg-cyan-950\/80,
+.pdf-print-mode .bg-cyan-500\/10,
+.pdf-print-mode .bg-cyan-500\/20 {
+  background-color: #f0f9ff !important;
+  border-color: #7dd3fc !important;
+}
+
+.pdf-print-mode .bg-emerald-950,
+.pdf-print-mode .bg-emerald-950\/50,
+.pdf-print-mode .bg-emerald-950\/60,
+.pdf-print-mode .bg-emerald-500\/10,
+.pdf-print-mode .bg-emerald-500\/20 {
+  background-color: #f0fdf4 !important;
+  border-color: #86efac !important;
+}
+
+/* Hide Navigation Panels, Top Module Strips, Action Toolbars & Utility Sidebar in Print Mode */
+.pdf-print-mode aside,
+body.pdf-print-mode aside,
+.pdf-print-mode header,
+body.pdf-print-mode header,
+.pdf-print-mode nav,
+body.pdf-print-mode nav,
+.pdf-print-mode [role="navigation"],
+body.pdf-print-mode [role="navigation"],
+.pdf-print-mode .sticky.top-0,
+body.pdf-print-mode .sticky.top-0,
+.pdf-print-mode [class*="sticky top-0"],
+body.pdf-print-mode [class*="sticky top-0"],
+.pdf-print-mode section.bg-\[\#090F22\],
+body.pdf-print-mode section.bg-\[\#090F22\],
+.pdf-print-mode [class*="bg-[#090F22]"],
+body.pdf-print-mode [class*="bg-[#090F22]"],
+.pdf-print-mode .navigation-panel,
+body.pdf-print-mode .navigation-panel,
+.pdf-print-mode .top-navigation-panel,
+body.pdf-print-mode .top-navigation-panel,
+.pdf-print-mode .main-header-panel,
+body.pdf-print-mode .main-header-panel,
+.pdf-print-mode .sub-system-nav-panel,
+body.pdf-print-mode .sub-system-nav-panel,
+.pdf-print-mode .utility-sidebar,
+body.pdf-print-mode .utility-sidebar,
+.pdf-print-mode [data-sidebar],
+body.pdf-print-mode [data-sidebar],
+.pdf-print-mode [data-testid="utility-sidebar"],
+body.pdf-print-mode [data-testid="utility-sidebar"],
+.pdf-print-mode .sidebar-conversion-list,
+body.pdf-print-mode .sidebar-conversion-list,
+.pdf-print-mode .floating-utility-converter,
+body.pdf-print-mode .floating-utility-converter,
+.pdf-print-mode .floating-quick-actions,
+body.pdf-print-mode .floating-quick-actions,
+.pdf-print-mode .history-utility-drawer,
+body.pdf-print-mode .history-utility-drawer,
+.pdf-print-mode .btn-micro-action,
+body.pdf-print-mode .btn-micro-action,
+.pdf-print-mode [class*="fixed bottom"],
+body.pdf-print-mode [class*="fixed bottom"],
+.pdf-print-mode [class*="fixed top-20"],
+body.pdf-print-mode [class*="fixed top-20"],
+.pdf-print-mode [class*="fixed inset-y-0"],
+body.pdf-print-mode [class*="fixed inset-y-0"],
+.pdf-print-mode [role="dialog"],
+body.pdf-print-mode [role="dialog"],
+.pdf-print-mode .hide-in-pdf-print,
+body.pdf-print-mode .hide-in-pdf-print {
+  display: none !important;
+}
+
+/* Ensure Core Calculation Content & Results Occupy Clean Full Page */
+body.pdf-print-mode {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}
+
+.pdf-print-mode #root,
+body.pdf-print-mode #root,
+.pdf-print-mode #root > div,
+body.pdf-print-mode #root > div,
+.pdf-print-mode .flex.h-screen,
+body.pdf-print-mode .flex.h-screen {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  background-color: #ffffff !important;
+}
+
+.pdf-print-mode #calculation-workspace,
+body.pdf-print-mode #calculation-workspace,
+.pdf-print-mode [role="main"],
+body.pdf-print-mode [role="main"] {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 1.5rem !important;
+  background-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.pdf-print-mode .h-screen,
+body.pdf-print-mode .h-screen,
+.pdf-print-mode .overflow-hidden,
+body.pdf-print-mode .overflow-hidden,
+.pdf-print-mode .overflow-y-auto,
+body.pdf-print-mode .overflow-y-auto {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.pdf-print-mode .flex-1,
+body.pdf-print-mode .flex-1 {
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: none !important;
+}
+
+.pdf-print-mode table,
+.pdf-print-mode .rounded-xl,
+.pdf-print-mode .rounded-2xl,
+body.pdf-print-mode table,
+body.pdf-print-mode .rounded-xl,
+body.pdf-print-mode .rounded-2xl {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+@media print {
+  aside,
+  header,
+  nav,
+  [role="navigation"],
+  .sticky.top-0,
+  [class*="sticky top-0"],
+  section.bg-\[\#090F22\],
+  [class*="bg-[#090F22]"],
+  .navigation-panel,
+  .top-navigation-panel,
+  .main-header-panel,
+  .sub-system-nav-panel,
+  .utility-sidebar,
+  [data-sidebar],
+  [data-testid="utility-sidebar"],
+  .sidebar-conversion-list,
+  .floating-utility-converter,
+  .floating-quick-actions,
+  .history-utility-drawer,
+  .btn-micro-action,
+  [class*="fixed bottom"],
+  [class*="fixed top-20"],
+  [class*="fixed inset-y-0"],
+  [role="dialog"],
+  .hide-in-pdf-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  #root,
+  #root > div,
+  .flex.h-screen {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background-color: #ffffff !important;
+  }
+
+  #calculation-workspace,
+  [role="main"] {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0.5rem !important;
+    background-color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .h-screen,
+  .overflow-hidden,
+  .overflow-y-auto {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .flex-1 {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+  }
+
+  table,
+  .rounded-xl,
+  .rounded-2xl {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+
+
+

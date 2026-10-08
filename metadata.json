@@ -1,0 +1,6 @@
+{
+  "name": "CKY_MEPF",
+  "description": "MEP & F System Calculation Tool for Construction Project Design",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
