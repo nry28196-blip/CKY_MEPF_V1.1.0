@@ -80,6 +80,18 @@ import AuditTrailOverlayModal from './components/AuditTrailOverlayModal';
 import SidebarConversionList from './components/SidebarConversionList';
 import { useLanguage } from './lib/translations';
 import { exportElementToPdf } from './lib/exportPdf';
+import {
+  exportVentilationToCsv,
+  exportCoolingLoadToCsv,
+  exportVrfToCsv,
+  exportDuctSizingToCsv,
+  exportExhaustToCsv,
+  exportStaticPressureToCsv,
+  exportKitchenVentilationToCsv,
+  exportAirBalanceToCsv,
+  exportDuctFittingsToCsv,
+  downloadCsv
+} from './lib/exportCsv';
 import { useUnit } from './lib/UnitContext';
 import { scrollWorkspaceToTop } from './lib/scrollUtils';
 import { getProjects } from './lib/projectStorage';
@@ -334,6 +346,182 @@ export default function App() {
       summary,
       parameters: { activeTab, activeSubordinates, ventilationSubMode, lastCalculationResult, exhaustStatus, coolingResult }
     });
+  };
+
+  /**
+   * Universal CSV export handler for active calculation view
+   */
+  const handleExportCurrentCsv = () => {
+    const isMetric = unitSystem === 'metric';
+
+    if (activeTab === 'mechanical') {
+      const currentSub = activeSubordinates.mechanical;
+      const currentMod = getActiveMechModuleId(currentSub);
+
+      if (currentSub === 'ventilation') {
+        if (currentMod === 'exhaust') {
+          exportExhaustToCsv({
+            isMetric,
+            complianceProcedure: 'prescriptive',
+            overallStatus: exhaustStatus || 'READY',
+            rows: []
+          });
+          return;
+        }
+        if (currentMod === 'balance') {
+          exportAirBalanceToCsv({
+            isMetric,
+            mode: 'system',
+            supplyAir: isMetric ? 1000 : 2000,
+            exhaustAir: isMetric ? 800 : 1600,
+            returnAir: isMetric ? 200 : 400,
+            netAirflow: 0,
+            pressureRelationship: 'Balanced'
+          });
+          return;
+        }
+        exportVentilationToCsv({
+          isMetric,
+          systemType: lastCalculationResult?.systemType || 'single_zone',
+          result: lastCalculationResult,
+          zones: lastCalculationResult?.zones || []
+        });
+        return;
+      }
+
+      if (currentSub === 'cooling') {
+        if (currentMod === 'vrf' || currentMod === 'schedules') {
+          exportVrfToCsv({
+            rooms: [
+              { name: 'Zone 1', size: 50, basis: 'area', occupants: 4, tons: 2.0 },
+              { name: 'Zone 2', size: 40, basis: 'area', occupants: 3, tons: 1.5 }
+            ],
+            diversityFactor: 1.15,
+            totalConnectedTons: 3.5,
+            coincidentTons: 3.04,
+            oduSizeHp: 4,
+            oduSizeTons: 3.4,
+            combinationRatio: 102.9,
+            pipingLength: 45,
+            refrigerantCharge: 2.48
+          });
+          return;
+        }
+        exportCoolingLoadToCsv({
+          basis: coolingResult?.estimationBasis || 'area',
+          projectType: 'Commercial',
+          area: coolingResult?.area || 100,
+          volume: coolingResult?.volume || 300,
+          occupants: coolingResult?.occupants || 5,
+          tons: coolingResult?.totalCoolingTons || 5.0,
+          btu: (coolingResult?.totalCoolingTons || 5.0) * 12000,
+          watts: (coolingResult?.totalCoolingTons || 5.0) * 3517,
+          sensibleWatts: coolingResult?.sensibleWatts,
+          latentWatts: coolingResult?.latentWatts,
+          status: coolingResult?.status || 'READY'
+        });
+        return;
+      }
+
+      if (currentSub === 'ductSizing') {
+        if (currentMod === 'fittings') {
+          exportDuctFittingsToCsv({
+            isMetric,
+            velocity: isMetric ? 6.0 : 1200,
+            airDensity: isMetric ? 1.204 : 0.075,
+            velocityPressure: isMetric ? 21.67 : 0.09,
+            selectedCategory: 'all',
+            fittings: []
+          });
+          return;
+        }
+        if (currentMod === 'critical_path') {
+          exportStaticPressureToCsv({
+            isMetric,
+            density: isMetric ? 1.204 : 0.075,
+            roughness: isMetric ? 0.00009 : 0.0003,
+            safetyFactor: 10,
+            criticalPathId: 'path-1',
+            criticalPathName: 'Governing Critical Duct Run',
+            maxPressure: isMetric ? 250 : 1.0,
+            designPressure: isMetric ? 275 : 1.1,
+            maxPathAirflow: isMetric ? 1200 : 2500,
+            paths: []
+          });
+          return;
+        }
+        exportDuctSizingToCsv({
+          airflow: isMetric ? 1000 : 2000,
+          frictionRate: isMetric ? 0.8 : 0.1,
+          velocityLimit: isMetric ? 5.0 : 1200,
+          ductHeight: isMetric ? 300 : 14,
+          widthMain: isMetric ? 450 : 22,
+          deMain: isMetric ? 380 : 18.5,
+          velRoundMain: isMetric ? 4.8 : 1050,
+          velRectMain: isMetric ? 4.4 : 940,
+          branches: []
+        });
+        return;
+      }
+
+      if (currentSub === 'fanDuty') {
+        exportStaticPressureToCsv({
+          isMetric,
+          density: isMetric ? 1.204 : 0.075,
+          roughness: isMetric ? 0.00009 : 0.0003,
+          safetyFactor: 10,
+          criticalPathId: 'path-1',
+          criticalPathName: 'Governing Fan Duty Index Run',
+          maxPressure: isMetric ? 280 : 1.12,
+          designPressure: isMetric ? 308 : 1.23,
+          maxPathAirflow: isMetric ? 1500 : 3000,
+          paths: []
+        });
+        return;
+      }
+
+      if (currentSub === 'kitchenHood') {
+        exportKitchenVentilationToCsv({
+          isMetric,
+          standard: 'unlisted',
+          hoodType: 'wall',
+          duty: 'medium',
+          hoodLength: isMetric ? 3.0 : 10,
+          hoodDepth: isMetric ? 1.2 : 4,
+          exhaustAirflow: isMetric ? 850 : 1800,
+          muaTotalFlow: isMetric ? 680 : 1440,
+          totalMuaRatio: 80,
+          ductArea: isMetric ? 425 : 65,
+          ductVelocity: isMetric ? 2.5 : 500,
+          status: 'READY'
+        });
+        return;
+      }
+    }
+
+    // Default/fallback for current view
+    const rows = [
+      { section: 'Active View', parameter: 'Discipline', value: activeTab.toUpperCase(), unit: '-', notes: '' },
+      { section: 'Active View', parameter: 'Sub-system', value: (activeSubordinates[activeTab] || '').toUpperCase(), unit: '-', notes: '' },
+      { section: 'Active View', parameter: 'Timestamp', value: new Date().toLocaleString(), unit: '-', notes: '' }
+    ];
+
+    if (lastCalculationResult) {
+      if (lastCalculationResult.status) {
+        rows.push({ section: 'Results', parameter: 'Validation Status', value: lastCalculationResult.status, unit: '-', notes: '' });
+      }
+      if (typeof lastCalculationResult.finalDesignOutdoorAir === 'number') {
+        rows.push({ section: 'Results', parameter: 'Required Outdoor Airflow', value: lastCalculationResult.finalDesignOutdoorAir.toFixed(1), unit: isMetric ? 'L/s' : 'cfm', notes: '' });
+      }
+    }
+
+    if (coolingResult) {
+      if (coolingResult.totalCoolingTons) {
+        rows.push({ section: 'Results', parameter: 'Cooling Capacity', value: coolingResult.totalCoolingTons.toFixed(2), unit: 'TR', notes: '' });
+      }
+    }
+
+    downloadCsv(`${activeTab}_${activeSubordinates[activeTab] || 'calc'}`, `${activeTab.toUpperCase()} Calculation Data`, rows);
   };
 
   // Stable callback for ventilation calculation result propagation
@@ -2080,6 +2268,17 @@ export default function App() {
                 >
                   <Save className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Save</span>
+                </button>
+
+                {/* Export CSV Button */}
+                <button
+                  id="main-header-export-csv-btn"
+                  onClick={handleExportCurrentCsv}
+                  className="btn-micro-action flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer"
+                  title="Export active calculation inputs and performance outputs to CSV"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Export CSV</span>
                 </button>
 
                 {/* Export PDF Button */}

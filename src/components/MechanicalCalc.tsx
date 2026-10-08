@@ -398,6 +398,84 @@ export default function MechanicalCalc({
     triggerToast(`Applied ASHRAE standard: ${recommendedValue}`);
   }, []);
 
+  const handleExportMechanicalCsv = () => {
+    if (activeCoolingMode === 'vrf') {
+      exportVrfToCsv({
+        rooms: vrfRooms.map(r => ({ name: r.name, size: r.size, basis: r.basis, occupants: r.occupants, tons: r.tons })),
+        diversityFactor,
+        totalConnectedTons: vrfResults.totalConnectedTons,
+        coincidentTons: vrfResults.coincidentTons,
+        oduSizeHp: vrfResults.oduHP,
+        oduSizeTons: vrfResults.oduTons,
+        combinationRatio: vrfResults.combinationRatio,
+        pipingLength,
+        refrigerantCharge: vrfResults.additionalCharge
+      });
+      triggerToast('VRF system configuration exported to CSV!');
+      return;
+    }
+
+    if (activeCoolingMode === 'schedules') {
+      exportVrfToCsv({
+        rooms: vrfRooms,
+        diversityFactor,
+        totalConnectedTons: vrfResults.totalConnectedTons,
+        coincidentTons: vrfResults.coincidentTons,
+        oduSizeHp: vrfResults.oduHP,
+        oduSizeTons: vrfResults.oduTons,
+        combinationRatio: (vrfResults.combinationRatio || 0) * 100,
+        pipingLength,
+        refrigerantCharge: vrfResults.additionalCharge
+      });
+      triggerToast('Equipment schedule exported to CSV!');
+      return;
+    }
+
+    if (results.status === 'INCOMPLETE') {
+      triggerToast('INCOMPLETE: Cannot export calculation.');
+      return;
+    }
+
+    exportCoolingLoadToCsv({
+      basis: estimationBasis,
+      projectType,
+      area: Number(area),
+      volume: Number(volume),
+      occupants: Number(occupants),
+      outdoorTemp,
+      indoorTemp,
+      ceilingHeight: height,
+      sensiblePerPerson,
+      latentPerPerson,
+      lightingWpm2,
+      equipmentWatts,
+      wallArea,
+      wallUValue,
+      roofArea,
+      roofUValue,
+      windowArea,
+      windowUValue,
+      windowShgc,
+      ventilationLps,
+      infiltrationACH,
+      safetyFactor,
+      altitude,
+      relativeHumidity,
+      tons: isVrf ? vrfResults.totalConnectedTons : results.tons,
+      btu: isVrf ? vrfResults.totalConnectedTons * 12000 : results.btu,
+      watts: isVrf ? vrfResults.totalConnectedTons * 3517 : results.watts,
+      sensibleWatts: results.totalSensible,
+      latentWatts: results.totalLatent,
+      envelopeWatts: (results.wallSensible || 0) + (results.roofSensible || 0) + (results.windowCondSensible || 0) + (results.solarSensible || 0),
+      peopleWatts: (results.peopleSensible || 0) + (results.peopleLatent || 0),
+      lightingWatts: results.lightingSensible,
+      ventilationWatts: (results.ventSensible || 0) + (results.ventLatent || 0),
+      safetyWatts: results.finalTotal - results.calculatedTotal,
+      status: results.status
+    });
+    triggerToast('Cooling calculation data exported to CSV!');
+  };
+
   return (
     <div className="space-y-6">
       <CoolingLoadReference isOpen={showCoolingRef} onClose={() => setShowCoolingRef(false)} />
@@ -448,7 +526,7 @@ export default function MechanicalCalc({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="flex bg-slate-950 border border-slate-850 p-0.5 rounded-xl text-xs font-bold uppercase w-fit">
               <span className="px-3 py-1.5 text-slate-400">Project Type:</span>
               <select
@@ -462,6 +540,17 @@ export default function MechanicalCalc({
                 <option value="Industrial">Industrial</option>
               </select>
             </div>
+
+            <button
+              id="export-mechanical-calc-header-csv-btn"
+              type="button"
+              onClick={handleExportMechanicalCsv}
+              className="flex items-center gap-1.5 bg-slate-950 hover:bg-slate-900 text-slate-200 hover:text-white border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm"
+              title="Download current input parameters and resulting performance data to CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
 
@@ -1212,20 +1301,10 @@ export default function MechanicalCalc({
                     <span>{t('saveCalculation')}</span>
                   </button>
                   <button
-                    onClick={() => {
-                      if (results.status === 'INCOMPLETE') { triggerToast('INCOMPLETE: Cannot export.'); return; }
-                      exportCoolingLoadToCsv({
-                        basis: estimationBasis,
-                        area: Number(area),
-                        volume: Number(volume),
-                        occupants: Number(occupants),
-                        tons: results.tons,
-                        btu: results.btu,
-                        watts: results.watts
-                      });
-                      triggerToast('Cooling load data exported!');
-                    }}
+                    id="export-cooling-estimate-bottom-csv-btn"
+                    onClick={handleExportMechanicalCsv}
                     className="flex-1 flex items-center justify-center space-x-2 bg-slate-950 hover:bg-slate-900 text-slate-200 border border-slate-800 hover:border-slate-700 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer"
+                    title="Export cooling load calculation inputs and performance outputs to CSV"
                   >
                     <FileSpreadsheet className="h-4 w-4 text-cyan-400" />
                     <span>{t('exportCsv')}</span>

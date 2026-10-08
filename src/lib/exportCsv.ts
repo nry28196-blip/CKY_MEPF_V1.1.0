@@ -107,17 +107,134 @@ export function exportCoolingLoadToCsv(params: {
   tons: number;
   btu: number;
   watts: number;
+  projectType?: string;
+  outdoorTemp?: number;
+  indoorTemp?: number;
+  ceilingHeight?: number;
+  sensiblePerPerson?: number;
+  latentPerPerson?: number;
+  lightingWpm2?: number;
+  equipmentWatts?: number;
+  wallArea?: number;
+  wallUValue?: number;
+  roofArea?: number;
+  roofUValue?: number;
+  windowArea?: number;
+  windowUValue?: number;
+  windowShgc?: number;
+  ventilationLps?: number;
+  infiltrationACH?: number;
+  safetyFactor?: number;
+  altitude?: number;
+  relativeHumidity?: number;
+  sensibleWatts?: number;
+  latentWatts?: number;
+  envelopeWatts?: number;
+  peopleWatts?: number;
+  lightingWatts?: number;
+  ventilationWatts?: number;
+  infiltrationWatts?: number;
+  safetyWatts?: number;
+  status?: string;
 }) {
   const rows: CsvRow[] = [
     { section: "Space Parameters", parameter: "Estimation Basis", value: params.basis.toUpperCase(), unit: "N/A", notes: "Primary sizing metric" },
     { section: "Space Parameters", parameter: "Floor Area", value: params.area, unit: "m²", notes: "" },
     { section: "Space Parameters", parameter: "Room Volume", value: params.volume, unit: "m³", notes: "" },
     { section: "Space Parameters", parameter: "Occupants Count", value: params.occupants, unit: "Persons", notes: "Sensible & Latent load contribution" },
-    
+  ];
+
+  if (params.projectType) {
+    rows.unshift({ section: "Project Information", parameter: "Project Building Type", value: params.projectType, unit: "-", notes: "ASHRAE Standard baseline classification" });
+  }
+
+  if (params.ceilingHeight !== undefined) {
+    rows.push({ section: "Space Parameters", parameter: "Ceiling Height", value: params.ceilingHeight, unit: "m", notes: "" });
+  }
+
+  if (params.outdoorTemp !== undefined || params.indoorTemp !== undefined) {
+    if (params.outdoorTemp !== undefined) {
+      rows.push({ section: "Design Temperatures", parameter: "Outdoor Design Temp", value: params.outdoorTemp, unit: "°C", notes: "ASHRAE peak ambient design condition" });
+    }
+    if (params.indoorTemp !== undefined) {
+      rows.push({ section: "Design Temperatures", parameter: "Indoor Setpoint Temp", value: params.indoorTemp, unit: "°C", notes: "Comfort setpoint" });
+    }
+    if (params.outdoorTemp !== undefined && params.indoorTemp !== undefined) {
+      rows.push({ section: "Design Temperatures", parameter: "Design Temperature Differential (ΔT)", value: Number((params.outdoorTemp - params.indoorTemp).toFixed(1)), unit: "K (°C)", notes: "Thermal driving potential" });
+    }
+  }
+
+  if (params.wallArea !== undefined || params.roofArea !== undefined || params.windowArea !== undefined) {
+    if (params.wallArea !== undefined) {
+      rows.push({ section: "Building Envelope", parameter: "Gross Wall Area", value: params.wallArea, unit: "m²", notes: params.wallUValue ? `U-value: ${params.wallUValue} W/m²·K` : "" });
+    }
+    if (params.roofArea !== undefined) {
+      rows.push({ section: "Building Envelope", parameter: "Roof Area", value: params.roofArea, unit: "m²", notes: params.roofUValue ? `U-value: ${params.roofUValue} W/m²·K` : "" });
+    }
+    if (params.windowArea !== undefined) {
+      rows.push({ section: "Building Envelope", parameter: "Fenestration Area", value: params.windowArea, unit: "m²", notes: params.windowUValue ? `U: ${params.windowUValue} W/m²·K, SHGC: ${params.windowShgc ?? '-'}` : "" });
+    }
+  }
+
+  if (params.lightingWpm2 !== undefined || params.equipmentWatts !== undefined || params.sensiblePerPerson !== undefined) {
+    if (params.lightingWpm2 !== undefined) {
+      rows.push({ section: "Internal Heat Gains", parameter: "Lighting Power Density", value: params.lightingWpm2, unit: "W/m²", notes: "" });
+    }
+    if (params.equipmentWatts !== undefined) {
+      rows.push({ section: "Internal Heat Gains", parameter: "Plug Load / Equipment", value: params.equipmentWatts, unit: "Watts", notes: "" });
+    }
+    if (params.sensiblePerPerson !== undefined && params.latentPerPerson !== undefined) {
+      rows.push({ section: "Internal Heat Gains", parameter: "Occupant Heat Rate", value: `${params.sensiblePerPerson} Sensible / ${params.latentPerPerson} Latent`, unit: "W/person", notes: "Metabolic heat emission" });
+    }
+  }
+
+  if (params.ventilationLps !== undefined || params.infiltrationACH !== undefined) {
+    if (params.ventilationLps !== undefined) {
+      rows.push({ section: "Ventilation & Infiltration", parameter: "Outdoor Air Ventilation", value: params.ventilationLps, unit: "L/s", notes: "ASHRAE 62.1 fresh air rate" });
+    }
+    if (params.infiltrationACH !== undefined) {
+      rows.push({ section: "Ventilation & Infiltration", parameter: "Infiltration Rate", value: params.infiltrationACH, unit: "ACH", notes: "Air changes per hour" });
+    }
+  }
+
+  if (params.safetyFactor !== undefined) {
+    rows.push({ section: "Design Factors", parameter: "Safety Allowance Factor", value: `${params.safetyFactor}%`, unit: "%", notes: "Equipment sizing safety margin" });
+  }
+
+  // Outputs
+  rows.push(
     { section: "Cooling Load Output", parameter: "Required Cooling Capacity", value: (params.tons || 0).toFixed(2), unit: "TR (Tons of Refrigeration)", notes: "Standard HVAC unit of measure" },
     { section: "Cooling Load Output", parameter: "Thermal Power Output", value: Math.round(params.btu), unit: "BTU/hr", notes: "" },
-    { section: "Cooling Load Output", parameter: "Electric Power Requirement", value: Math.round(params.watts), unit: "W (Thermal)", notes: "Heat transfer rating" },
-  ];
+    { section: "Cooling Load Output", parameter: "Electric Power Requirement", value: Math.round(params.watts), unit: "W (Thermal)", notes: "Heat transfer rating" }
+  );
+
+  if (params.sensibleWatts !== undefined || params.latentWatts !== undefined) {
+    if (params.sensibleWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Sensible Heat Load", value: Math.round(params.sensibleWatts), unit: "Watts", notes: "" });
+    }
+    if (params.latentWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Latent Heat Load", value: Math.round(params.latentWatts), unit: "Watts", notes: "Moisture removal load" });
+    }
+    if (params.envelopeWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Envelope Conduction Load", value: Math.round(params.envelopeWatts), unit: "Watts", notes: "" });
+    }
+    if (params.peopleWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Occupant Heat Contribution", value: Math.round(params.peopleWatts), unit: "Watts", notes: "" });
+    }
+    if (params.lightingWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Lighting Heat Contribution", value: Math.round(params.lightingWatts), unit: "Watts", notes: "" });
+    }
+    if (params.ventilationWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Ventilation Load", value: Math.round(params.ventilationWatts), unit: "Watts", notes: "" });
+    }
+    if (params.safetyWatts !== undefined) {
+      rows.push({ section: "Heat Gain Breakdown", parameter: "Safety Allowance Load", value: Math.round(params.safetyWatts), unit: "Watts", notes: "" });
+    }
+  }
+
+  if (params.status) {
+    rows.push({ section: "Engineering Verification", parameter: "Calculation Status", value: params.status, unit: "-", notes: "ASHRAE Fundamentals Verification" });
+  }
 
   downloadCsv("cooling_load_calculation", "Cooling Load Heat Estimate Report", rows);
 }
@@ -367,3 +484,257 @@ export function exportVentilationToCsv(params: {
 
   downloadCsv('ashrae_62_1_ventilation', 'ASHRAE 62.1 Ventilation Calculation', rows);
 }
+
+export function exportExhaustToCsv(params: {
+  isMetric: boolean;
+  complianceProcedure: 'prescriptive' | 'performance';
+  overallStatus: string;
+  rows: Array<{
+    name: string;
+    categoryName: string;
+    quantity: number | string;
+    unitType: string;
+    requiredExhaust: number | string;
+    designExhaust: number | string;
+    status: string;
+    airClass?: number | string;
+    operationMode?: string;
+  }>;
+}) {
+  const flowUnit = params.isMetric ? 'L/s' : 'cfm';
+  const csvRows: CsvRow[] = [
+    { section: 'Exhaust System', parameter: 'Compliance Procedure', value: params.complianceProcedure.toUpperCase(), unit: '-', notes: 'ASHRAE 62.1 Section 6.5' },
+    { section: 'Exhaust System', parameter: 'Overall Status', value: params.overallStatus, unit: '-', notes: '' }
+  ];
+
+  params.rows.forEach((r, idx) => {
+    const sec = `Space ${idx + 1}: ${r.name || 'Unnamed'}`;
+    csvRows.push({ section: sec, parameter: 'Space Category', value: r.categoryName, unit: '-', notes: '' });
+    csvRows.push({ section: sec, parameter: 'Basis Quantity', value: r.quantity, unit: r.unitType, notes: '' });
+    csvRows.push({ section: sec, parameter: 'Required Exhaust', value: r.requiredExhaust, unit: flowUnit, notes: 'Prescriptive Table 6-2 rate' });
+    csvRows.push({ section: sec, parameter: 'Design Exhaust', value: r.designExhaust, unit: flowUnit, notes: 'Proposed actual design airflow' });
+    csvRows.push({ section: sec, parameter: 'Air Class', value: r.airClass || 'N/A', unit: '-', notes: 'ASHRAE Table 6-2/6-3' });
+    csvRows.push({ section: sec, parameter: 'Operation Mode', value: r.operationMode || 'Continuous', unit: '-', notes: '' });
+    csvRows.push({ section: sec, parameter: 'Compliance Status', value: r.status, unit: '-', notes: '' });
+  });
+
+  downloadCsv('commercial_exhaust_calculation', 'ASHRAE 62.1 Commercial Exhaust Calculation', csvRows);
+}
+
+export function exportStaticPressureToCsv(params: {
+  isMetric: boolean;
+  density: number;
+  roughness: number;
+  safetyFactor: number;
+  criticalPathId: string;
+  criticalPathName: string;
+  maxPressure: number;
+  designPressure: number;
+  maxPathAirflow: number;
+  paths: Array<{
+    name: string;
+    isCritical: boolean;
+    sections: Array<{
+      name: string;
+      airflow: number;
+      shape: 'rect' | 'round';
+      dimensions: string;
+      length: number;
+      fittingLossCoeff: number;
+      equipmentLoss: number;
+      frictionLoss: number;
+      totalLoss: number;
+    }>;
+  }>;
+}) {
+  const pressUnit = params.isMetric ? 'Pa' : 'in.wg';
+  const flowUnit = params.isMetric ? 'L/s' : 'CFM';
+  const lenUnit = params.isMetric ? 'm' : 'ft';
+  const densityUnit = params.isMetric ? 'kg/m³' : 'lb/ft³';
+
+  const rows: CsvRow[] = [
+    { section: 'System Properties', parameter: 'Air Density', value: params.density, unit: densityUnit, notes: 'Darcy-Weisbach / Colebrook basis' },
+    { section: 'System Properties', parameter: 'Duct Roughness', value: params.roughness, unit: lenUnit, notes: 'Absolute surface roughness' },
+    { section: 'System Properties', parameter: 'Safety Allowance Factor', value: params.safetyFactor, unit: '%', notes: '' },
+    { section: 'Critical Path Results', parameter: 'Critical Path Name', value: params.criticalPathName, unit: '-', notes: 'Governing fan duty run' },
+    { section: 'Critical Path Results', parameter: 'Calculated Critical Resistance', value: params.maxPressure.toFixed(2), unit: pressUnit, notes: 'Sum of duct, fittings, and equipment' },
+    { section: 'Critical Path Results', parameter: 'Total Design Static Pressure', value: params.designPressure.toFixed(2), unit: pressUnit, notes: 'Including safety factor' },
+    { section: 'Critical Path Results', parameter: 'Design Airflow', value: Math.ceil(params.maxPathAirflow), unit: flowUnit, notes: 'Peak fan volumetric duty' }
+  ];
+
+  params.paths.forEach((p) => {
+    const secTag = `Duct Run: ${p.name}${p.isCritical ? ' (CRITICAL PATH)' : ''}`;
+    p.sections.forEach((s) => {
+      rows.push({
+        section: secTag,
+        parameter: `Section: ${s.name}`,
+        value: `${s.airflow} ${flowUnit} | ${s.dimensions} | L=${s.length}${lenUnit}`,
+        unit: pressUnit,
+        notes: `Friction=${s.frictionLoss.toFixed(2)}, Fitting (C=${s.fittingLossCoeff}), Eq=${s.equipmentLoss.toFixed(2)} -> Total=${s.totalLoss.toFixed(2)}`
+      });
+    });
+  });
+
+  downloadCsv('fan_static_pressure_calculation', 'Duct System Static Pressure and Fan Duty Sizing', rows);
+}
+
+export function exportKitchenVentilationToCsv(params: {
+  isMetric: boolean;
+  standard: string;
+  hoodType: string;
+  duty: string;
+  hoodLength: number;
+  hoodDepth: number;
+  exhaustAirflow: number;
+  muaTotalFlow: number;
+  totalMuaRatio: number;
+  ductArea: number;
+  ductVelocity: number;
+  status: string;
+}) {
+  const flowUnit = params.isMetric ? 'L/s' : 'CFM';
+  const lenUnit = params.isMetric ? 'm' : 'ft';
+  const velUnit = params.isMetric ? 'm/s' : 'FPM';
+  const areaUnit = params.isMetric ? 'cm²' : 'sq in';
+
+  const rows: CsvRow[] = [
+    { section: 'Hood Parameters', parameter: 'Governing Standard', value: params.standard.toUpperCase(), unit: '-', notes: 'NFPA 96 / IMC / UL 710' },
+    { section: 'Hood Parameters', parameter: 'Hood Style', value: params.hoodType, unit: '-', notes: '' },
+    { section: 'Hood Parameters', parameter: 'Thermal Cooking Duty', value: params.duty.toUpperCase(), unit: '-', notes: '' },
+    { section: 'Hood Parameters', parameter: 'Hood Length', value: params.hoodLength.toFixed(2), unit: lenUnit, notes: 'Including side overhang' },
+    { section: 'Hood Parameters', parameter: 'Hood Depth', value: params.hoodDepth.toFixed(2), unit: lenUnit, notes: '' },
+    
+    { section: 'Airflow Outputs', parameter: 'Required Exhaust Airflow', value: Math.ceil(params.exhaustAirflow), unit: flowUnit, notes: 'Continuous commercial extraction' },
+    { section: 'Airflow Outputs', parameter: 'Make-Up Air Flow', value: Math.round(params.muaTotalFlow), unit: flowUnit, notes: `${params.totalMuaRatio}% replacement ratio` },
+    { section: 'Exhaust Ductwork', parameter: 'Minimum Exhaust Duct Area', value: Math.round(params.ductArea), unit: areaUnit, notes: `For ${params.ductVelocity} ${velUnit}` },
+    { section: 'Exhaust Ductwork', parameter: 'Design Velocity', value: params.ductVelocity, unit: velUnit, notes: 'IMC grease transport minimum' },
+    { section: 'Engineering Audit', parameter: 'Compliance Status', value: params.status, unit: '-', notes: '' }
+  ];
+
+  downloadCsv('commercial_kitchen_ventilation', 'Commercial Kitchen Hood Exhaust and MUA Calculation', rows);
+}
+
+export function exportAirBalanceToCsv(params: {
+  isMetric: boolean;
+  mode: 'room' | 'system';
+  supplyAir: number;
+  exhaustAir: number;
+  returnAir: number;
+  outdoorAir?: number;
+  transferAir?: number;
+  netAirflow: number;
+  pressureRelationship: string;
+  airChangesPerHour?: number;
+}) {
+  const flowUnit = params.isMetric ? 'L/s' : 'CFM';
+  const rows: CsvRow[] = [
+    { section: 'Air Balance Configuration', parameter: 'Analysis Mode', value: params.mode.toUpperCase(), unit: '-', notes: 'Volumetric flow diagnostic' },
+    { section: 'Flow Parameters', parameter: 'Supply Airflow', value: params.supplyAir, unit: flowUnit, notes: '' },
+    { section: 'Flow Parameters', parameter: 'Exhaust Airflow', value: params.exhaustAir, unit: flowUnit, notes: '' },
+    { section: 'Flow Parameters', parameter: 'Return Airflow', value: params.returnAir, unit: flowUnit, notes: '' }
+  ];
+
+  if (params.outdoorAir !== undefined) {
+    rows.push({ section: 'Flow Parameters', parameter: 'Outdoor Intake Airflow', value: params.outdoorAir, unit: flowUnit, notes: '' });
+  }
+  if (params.transferAir !== undefined) {
+    rows.push({ section: 'Flow Parameters', parameter: 'Transfer Air In', value: params.transferAir, unit: flowUnit, notes: '' });
+  }
+
+  rows.push({ section: 'Balance Summary', parameter: 'Net Volumetric Flow (Q_net)', value: params.netAirflow.toFixed(1), unit: flowUnit, notes: 'Supply - (Exhaust + Return)' });
+  rows.push({ section: 'Balance Summary', parameter: 'Pressurization State', value: params.pressureRelationship, unit: '-', notes: 'Positive, Negative, or Balanced' });
+
+  if (params.airChangesPerHour !== undefined) {
+    rows.push({ section: 'Ventilation Rate', parameter: 'Calculated Air Changes (ACH)', value: params.airChangesPerHour.toFixed(2), unit: '1/hr', notes: 'Based on total room/building volume' });
+  }
+
+  downloadCsv('air_balance_calculation', 'Volumetric Air Balance and Space Pressurization Report', rows);
+}
+
+export function exportDuctFittingsToCsv(params: {
+  isMetric: boolean;
+  velocity: number;
+  airDensity: number;
+  velocityPressure: number;
+  selectedCategory: string;
+  fittings: Array<{
+    id: string;
+    name: string;
+    category: string;
+    description: string;
+    lossCoefficient: number;
+    deltaP: number;
+  }>;
+}) {
+  const velUnit = params.isMetric ? 'm/s' : 'FPM';
+  const densityUnit = params.isMetric ? 'kg/m³' : 'lb/ft³';
+  const pressUnit = params.isMetric ? 'Pa' : 'in.wg';
+
+  const rows: CsvRow[] = [
+    { section: 'Flow Parameters', parameter: 'Duct Air Velocity', value: params.velocity, unit: velUnit, notes: 'Design operating air velocity' },
+    { section: 'Flow Parameters', parameter: 'Local Air Density', value: params.airDensity, unit: densityUnit, notes: 'Standard dry air density' },
+    { section: 'Flow Parameters', parameter: 'Velocity Pressure (Pv)', value: Number(params.velocityPressure.toFixed(3)), unit: pressUnit, notes: params.isMetric ? 'Pv = 0.5 * ρ * V²' : 'Pv = (ρ/0.075) * (V/4005)²' },
+    { section: 'Database Filter', parameter: 'Selected Category', value: params.selectedCategory.toUpperCase(), unit: '-', notes: 'ASHRAE Fitting Database Category' }
+  ];
+
+  params.fittings.forEach((fit) => {
+    rows.push({
+      section: `Fitting: ${fit.id}`,
+      parameter: fit.name,
+      value: `Co = ${fit.lossCoefficient.toFixed(2)} | ΔP = ${fit.deltaP.toFixed(2)} ${pressUnit}`,
+      unit: pressUnit,
+      notes: `${fit.category.toUpperCase()} - ${fit.description}`
+    });
+  });
+
+  downloadCsv('duct_fittings_loss_analysis', 'ASHRAE Duct Fitting Loss Coefficients and Pressure Drop Report', rows);
+}
+
+export function exportSystemPerformanceToCsv(params: {
+  isMetric: boolean;
+  qOutdoorAir: number;
+  qReturnAir: number;
+  densityRatio: number;
+  criticalDuctLength: number;
+  ductFrictionRate: number;
+  fittingLosses: number;
+  equipmentPressureDrop: number;
+  fanEfficiency: number;
+  motorEfficiency: number;
+  qSupplyStandard: number | null;
+  qSupplyActual: number | null;
+  totalStaticPressure: number | null;
+  fanBrakeHorsepower: number | null;
+  motorElectricalPower: number | null;
+  status: string;
+}) {
+  const flowUnit = params.isMetric ? 'L/s' : 'CFM';
+  const lengthUnit = params.isMetric ? 'm' : 'ft';
+  const pressureUnit = params.isMetric ? 'Pa' : 'in.wg.';
+  const frictionUnit = params.isMetric ? 'Pa/m' : 'in.wg./100ft';
+  const powerUnit = params.isMetric ? 'kW' : 'HP';
+
+  const rows: CsvRow[] = [
+    { section: 'Airflow & Environment', parameter: 'Outdoor Air Intake', value: params.qOutdoorAir, unit: flowUnit, notes: '' },
+    { section: 'Airflow & Environment', parameter: 'Return Airflow', value: params.qReturnAir, unit: flowUnit, notes: '' },
+    { section: 'Airflow & Environment', parameter: 'Air Density Ratio (Eρ)', value: Number(params.densityRatio.toFixed(3)), unit: 'Ratio', notes: 'Altitude and temperature air density correction' },
+
+    { section: 'Duct Network & Critical Path', parameter: 'Critical Duct Length', value: params.criticalDuctLength, unit: lengthUnit, notes: 'Most hydraulically restrictive run' },
+    { section: 'Duct Network & Critical Path', parameter: 'Duct Friction Rate', value: params.ductFrictionRate, unit: frictionUnit, notes: '' },
+    { section: 'Duct Network & Critical Path', parameter: 'Fitting Dynamic Losses', value: params.fittingLosses, unit: pressureUnit, notes: 'Fittings in critical path' },
+    { section: 'Duct Network & Critical Path', parameter: 'AHU Equipment Drop', value: params.equipmentPressureDrop, unit: pressureUnit, notes: 'Internal resistance (coils, filters, dampers)' },
+
+    { section: 'Fan & Motor Specifications', parameter: 'Fan Aerodynamic Efficiency', value: `${params.fanEfficiency}%`, unit: '%', notes: 'Impeller mechanical efficiency' },
+    { section: 'Fan & Motor Specifications', parameter: 'Motor Conversion Efficiency', value: `${params.motorEfficiency}%`, unit: '%', notes: 'Electrical-to-shaft power efficiency' },
+
+    { section: 'Operating Performance Duty Point', parameter: 'Standard Design Airflow', value: params.qSupplyStandard !== null ? Math.round(params.qSupplyStandard) : 'N/A', unit: flowUnit, notes: 'Supply flow before density adjustment' },
+    { section: 'Operating Performance Duty Point', parameter: 'Actual Volumetric Airflow', value: params.qSupplyActual !== null ? Math.round(params.qSupplyActual) : 'N/A', unit: flowUnit, notes: 'Corrected for local density ratio' },
+    { section: 'Operating Performance Duty Point', parameter: 'Total Static Pressure (TSP)', value: params.totalStaticPressure !== null ? params.totalStaticPressure.toFixed(2) : 'N/A', unit: pressureUnit, notes: 'Sum of duct, fittings, and equipment resistance' },
+    { section: 'Operating Performance Duty Point', parameter: 'Fan Brake Horsepower', value: params.fanBrakeHorsepower !== null ? params.fanBrakeHorsepower.toFixed(2) : 'N/A', unit: powerUnit, notes: 'Required shaft mechanical power' },
+    { section: 'Operating Performance Duty Point', parameter: 'Motor Electrical Duty', value: params.motorElectricalPower !== null ? params.motorElectricalPower.toFixed(2) : 'N/A', unit: 'kW', notes: 'Input electrical wire-to-air power' },
+    { section: 'Engineering Verification', parameter: 'Duty Point Status', value: params.status, unit: '-', notes: 'Equipment sizing diagnostic status' }
+  ];
+
+  downloadCsv('fan_system_aerodynamic_performance', 'Fan System Aerodynamic Performance and Operating Duty Point Report', rows);
+}
+

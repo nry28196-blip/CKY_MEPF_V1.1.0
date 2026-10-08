@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Layers, Activity, Building2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Layers, Activity, Building2, AlertTriangle, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import { useUnit } from '../lib/UnitContext';
 import EngineeringStatusHeader from './common/EngineeringStatusHeader';
 import { AirBalanceService, AirBalanceInput, AirBalanceResult, SystemBalanceInput, SystemBalanceResult } from '../calculations/ventilation/AirBalanceService';
+import { exportAirBalanceToCsv } from '../lib/exportCsv';
 
 export default function AirBalanceCalc() {
   const { unitSystem } = useUnit();
@@ -62,23 +63,60 @@ export default function AirBalanceCalc() {
             Evaluate room-level and building-level airflow pressure relationships.
           </p>
         </div>
-        <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={() => setMode('system')}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-              mode === 'system' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'
-            }`}
+            type="button"
+            id="export-air-balance-csv-btn"
+            onClick={() => {
+              if (mode === 'system') {
+                exportAirBalanceToCsv({
+                  isMetric,
+                  mode: 'system',
+                  supplyAir: sysSupply,
+                  exhaustAir: sysExhaust,
+                  returnAir: sysReturn,
+                  outdoorAir: sysOutdoor,
+                  netAirflow: systemResult.qNetBuilding ?? 0,
+                  pressureRelationship: systemResult.buildingPressure
+                });
+              } else {
+                exportAirBalanceToCsv({
+                  isMetric,
+                  mode: 'room',
+                  supplyAir,
+                  exhaustAir,
+                  returnAir,
+                  transferAir: transferIn,
+                  netAirflow: roomResult.qNet ?? 0,
+                  pressureRelationship: roomResult.pressureRelationship
+                });
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg border border-slate-800 hover:border-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+            title="Export air balance and pressurization analysis to CSV"
           >
-            System / Building
+            <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Export CSV</span>
           </button>
-          <button
-            onClick={() => setMode('room')}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-              mode === 'room' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'
-            }`}
-          >
-            Room / Zone
-          </button>
+
+          <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+            <button
+              onClick={() => setMode('system')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                mode === 'system' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              System / Building
+            </button>
+            <button
+              onClick={() => setMode('room')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                mode === 'room' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              Room / Zone
+            </button>
+          </div>
         </div>
       </div>
 

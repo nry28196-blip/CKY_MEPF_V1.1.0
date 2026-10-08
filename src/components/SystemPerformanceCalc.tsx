@@ -1,10 +1,11 @@
 import { DensityCorrectionService } from '../lib/DensityCorrectionService';
 import React, { useState, useEffect } from 'react';
-import { Activity, Fan, Wind, Gauge, Zap } from 'lucide-react';
+import { Activity, Fan, Wind, Gauge, Zap, FileSpreadsheet } from 'lucide-react';
 import { useUnit } from '../lib/UnitContext';
 import { UnitConversionService } from '../lib/UnitConversionService';
 import EngineeringStatusHeader from './common/EngineeringStatusHeader';
 import { SystemPerformanceService, SystemPerformanceInput, SystemPerformanceResult } from '../calculations/ventilation/SystemPerformanceService';
+import { exportSystemPerformanceToCsv } from '../lib/exportCsv';
 import ValidatedInput from './ValidatedInput';
 import TooltipLabel from './TooltipLabel';
 import AuditTrailTable from './AuditTrailTable';
@@ -62,13 +63,45 @@ export default function SystemPerformanceCalc({ globalAltitude = 0, globalAirTem
 
   const result: SystemPerformanceResult = SystemPerformanceService.calculateFanPerformance(input);
 
+  const handleExportCsv = () => {
+    exportSystemPerformanceToCsv({
+      isMetric,
+      qOutdoorAir,
+      qReturnAir,
+      densityRatio,
+      criticalDuctLength,
+      ductFrictionRate,
+      fittingLosses,
+      equipmentPressureDrop,
+      fanEfficiency,
+      motorEfficiency,
+      qSupplyStandard: result.qSupplyStandard,
+      qSupplyActual: result.qSupplyActual,
+      totalStaticPressure: result.totalStaticPressure,
+      fanBrakeHorsepower: result.fanBrakeHorsepower,
+      motorElectricalPower: result.motorElectricalPower,
+      status: result.status
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="text-xs font-mono font-bold text-amber-400 bg-amber-950/40 border border-amber-800/60 px-3 py-1.5 rounded-lg inline-flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-amber-400"></span>
           Utility Basis: Fan & Duct Aerodynamic Estimator (Non-ASHRAE 62.1 Compliance Procedure)
         </div>
+
+        <button
+          id="export-system-performance-csv-btn"
+          type="button"
+          onClick={handleExportCsv}
+          className="btn-micro-action inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer shadow-sm transition-colors"
+          title="Export fan performance inputs and duty point results to CSV"
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Export CSV</span>
+        </button>
       </div>
 
       <EngineeringStatusHeader 

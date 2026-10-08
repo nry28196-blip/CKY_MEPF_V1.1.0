@@ -665,6 +665,18 @@ export default function Ashrae621VentilationCalc({
               </>
             )}
           </button>
+
+          {/* Export CSV Button */}
+          <button
+            id="export-ashrae621-ventilation-csv-btn"
+            type="button"
+            onClick={() => exportVentilationToCsv({ isMetric, systemType, result: engineResult, zones })}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+            title="Download current space parameters, ventilation rates, and multi-zone performance data to CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 

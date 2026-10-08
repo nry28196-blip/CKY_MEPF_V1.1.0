@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Wind, Activity, CheckCircle2, AlertTriangle, ChefHat, BookOpen, Calculator, Info, ThermometerSun, Maximize } from 'lucide-react';
+import { Wind, Activity, CheckCircle2, AlertTriangle, ChefHat, BookOpen, Calculator, Info, ThermometerSun, Maximize, FileSpreadsheet } from 'lucide-react';
 import { useLanguage } from '../lib/translations';
 import { useUnit } from '../lib/UnitContext';
 import TooltipLabel from './TooltipLabel';
 import EngineeringStatusHeader from './common/EngineeringStatusHeader';
 import AuditTrailTable from './AuditTrailTable';
+import { exportKitchenVentilationToCsv } from '../lib/exportCsv';
 import { 
   KitchenVentilationService, 
   KitchenVentilationInput, 
@@ -354,12 +355,37 @@ export default function KitchenVentilationCalc({
               </div>
 <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg h-full">
         
-          <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+          <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 flex-wrap gap-2">
             <h3 className="text-sm font-semibold text-white flex items-center">
               <Activity className="w-4 h-4 mr-2 text-rose-400" />
               Kitchen Exhaust Results
             </h3>
-            <div className="flex space-x-2">
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                id="export-kitchen-csv-btn"
+                onClick={() => {
+                  exportKitchenVentilationToCsv({
+                    isMetric,
+                    standard: hoodStandard,
+                    hoodType,
+                    duty,
+                    hoodLength,
+                    hoodDepth,
+                    exhaustAirflow,
+                    muaTotalFlow,
+                    totalMuaRatio,
+                    ductArea,
+                    ductVelocity,
+                    status: result.status
+                  });
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 hover:bg-slate-850 text-slate-200 hover:text-white rounded border border-slate-800 hover:border-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                title="Export kitchen ventilation calculation to CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-rose-400" />
+                <span>Export CSV</span>
+              </button>
               <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest border border-slate-800 px-2 py-1 rounded bg-slate-950">
                 L: {(hoodLength || 0).toFixed(2)} {lenUnit}
               </span>

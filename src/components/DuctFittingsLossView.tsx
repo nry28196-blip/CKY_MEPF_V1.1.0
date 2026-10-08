@@ -9,10 +9,12 @@ import {
   CheckCircle2, 
   Copy, 
   Check, 
-  ShieldCheck 
+  ShieldCheck,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ASHRAE_FITTINGS_DB, DuctFitting } from '../calculations/duct/FittingsDatabase';
 import { useUnit } from '../lib/UnitContext';
+import { exportDuctFittingsToCsv } from '../lib/exportCsv';
 import EngineeringStatusHeader from './common/EngineeringStatusHeader';
 import TooltipLabel from './TooltipLabel';
 import { scrollWorkspaceToTop } from '../lib/scrollUtils';
@@ -74,6 +76,24 @@ export default function DuctFittingsLossView() {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
+  const handleExportCsv = () => {
+    exportDuctFittingsToCsv({
+      isMetric,
+      velocity,
+      airDensity,
+      velocityPressure,
+      selectedCategory,
+      fittings: filteredFittings.map(fit => ({
+        id: fit.id,
+        name: fit.name,
+        category: fit.category,
+        description: fit.description,
+        lossCoefficient: fit.lossCoefficient,
+        deltaP: fit.lossCoefficient * velocityPressure
+      }))
+    });
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in font-sans">
       <EngineeringStatusHeader
@@ -94,11 +114,24 @@ export default function DuctFittingsLossView() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-            <span className="text-[10px] font-mono uppercase text-slate-400">Velocity Pressure (Pᵥ):</span>
-            <span className="text-sm font-mono font-bold text-cyan-300">
-              {velocityPressure.toFixed(2)} {pressUnit}
-            </span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
+              <span className="text-[10px] font-mono uppercase text-slate-400">Velocity Pressure (Pᵥ):</span>
+              <span className="text-sm font-mono font-bold text-cyan-300">
+                {velocityPressure.toFixed(2)} {pressUnit}
+              </span>
+            </div>
+
+            <button
+              id="export-fittings-csv-btn"
+              type="button"
+              onClick={handleExportCsv}
+              className="btn-micro-action flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-850 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer shadow-sm transition-colors"
+              title="Export velocity pressure and fitting loss analysis to CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
 

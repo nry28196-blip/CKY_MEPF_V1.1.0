@@ -485,9 +485,22 @@ export default function DuctSizingCalc({ restoredParams, onSaveCalculation, auto
             Equal Friction Method solver with recursive multi-branch air flow splitting.
           </p>
         </div>
-        <div className="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-900/50 px-3 py-1.5 rounded-full font-mono">
-          <Wind className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '6s' }} />
-          <span>ASHRAE Standard Air Flow Dynamics</span>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            id="export-duct-sizing-header-csv-btn"
+            type="button"
+            onClick={handleExportBOQ}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-200 hover:text-white text-xs font-semibold rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer transition-colors shadow-sm"
+            title="Download current duct sizing input parameters, main trunk dimensions, and branch schedule to CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Export CSV</span>
+          </button>
+
+          <div className="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-900/50 px-3 py-1.5 rounded-full font-mono">
+            <Wind className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '6s' }} />
+            <span>ASHRAE Standard Air Flow Dynamics</span>
+          </div>
         </div>
       </div>
 

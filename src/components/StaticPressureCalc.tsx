@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Wind, Plus, Trash2, Activity, ShieldAlert, GitBranch, AlertCircle } from 'lucide-react';
+import { Settings, Wind, Plus, Trash2, Activity, ShieldAlert, GitBranch, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { useUnit } from '../lib/UnitContext';
 import { ASHRAE_FITTINGS_DB } from '../calculations/duct/FittingsDatabase';
 import { CriticalPathService, PathInput, DuctSection } from '../calculations/duct/CriticalPathService';
 import TooltipLabel from './TooltipLabel';
 import { scrollWorkspaceToTop } from '../lib/scrollUtils';
+import { exportStaticPressureToCsv } from '../lib/exportCsv';
 
 export default function StaticPressureCalc() {
   const { unitSystem } = useUnit();
@@ -367,10 +368,55 @@ export default function StaticPressureCalc() {
 
       {/* Results */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
-        <h3 className="text-sm font-semibold text-white mb-5 flex items-center">
-          <Activity className="w-4 h-4 mr-2 text-emerald-400" />
-          Fan Duty Selection
-        </h3>
+        <div className="flex justify-between items-center mb-5 flex-wrap gap-3">
+          <h3 className="text-sm font-semibold text-white flex items-center">
+            <Activity className="w-4 h-4 mr-2 text-emerald-400" />
+            Fan Duty Selection
+          </h3>
+          <button
+            type="button"
+            id="export-static-pressure-csv-btn"
+            onClick={() => {
+              exportStaticPressureToCsv({
+                isMetric,
+                density,
+                roughness,
+                safetyFactor,
+                criticalPathId: result.criticalPathId,
+                criticalPathName: criticalPath?.name || 'Main Run',
+                maxPressure: result.maxPressure,
+                designPressure,
+                maxPathAirflow,
+                paths: paths.map(p => {
+                  const pRes = result.paths.find(r => r.pathId === p.id);
+                  return {
+                    name: p.name,
+                    isCritical: p.id === result.criticalPathId,
+                    sections: p.sections.map(s => {
+                      const sRes = pRes?.sections.find(sx => sx.sectionId === s.id);
+                      return {
+                        name: s.name,
+                        airflow: s.airflow,
+                        shape: s.diameter !== undefined ? 'round' : 'rect',
+                        dimensions: s.diameter !== undefined ? `Ø${s.diameter}${dimUnit}` : `${s.width}x${s.height}${dimUnit}`,
+                        length: s.length,
+                        fittingLossCoeff: s.fittingLossCoeff,
+                        equipmentLoss: s.equipmentLoss,
+                        frictionLoss: sRes?.frictionLoss || 0,
+                        totalLoss: sRes?.totalLoss || 0
+                      };
+                    })
+                  };
+                })
+              });
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-850 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
+            title="Export static pressure calculation and duct run schedule to CSV"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Export CSV</span>
+          </button>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-slate-950/50 p-6 rounded-xl border border-emerald-900/30 flex flex-col justify-center relative overflow-hidden">

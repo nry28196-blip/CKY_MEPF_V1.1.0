@@ -5,7 +5,8 @@ import { Ashrae621ExhaustService, ExhaustOperationMode } from '../calculations/v
 import { VentilationValidationService } from '../calculations/ventilation/VentilationValidationService';
 import TooltipLabel from './TooltipLabel';
 import EngineeringStatusHeader, { EngineeringStatus } from './common/EngineeringStatusHeader';
-import { Wind, Plus, Trash2, Info, AlertTriangle, ShieldAlert, Layers } from 'lucide-react';
+import { Wind, Plus, Trash2, Info, AlertTriangle, ShieldAlert, Layers, FileSpreadsheet } from 'lucide-react';
+import { exportExhaustToCsv } from '../lib/exportCsv';
 
 interface ExhaustRow {
   id: string;
@@ -163,18 +164,47 @@ export default function Ashrae621ExhaustCalc({ edition = '2022', onStatusChange 
       )}
 
       <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-2 text-rose-400">
             <Wind className="w-5 h-5" />
             <h3 className="font-semibold text-white">Prescriptive Space Exhaust Rates</h3>
           </div>
-          <button
-            id="add-exhaust-space-btn"
-            onClick={addRow}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Add Space
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              id="export-exhaust-csv-btn"
+              onClick={() => {
+                exportExhaustToCsv({
+                  isMetric,
+                  complianceProcedure,
+                  overallStatus: results.status,
+                  rows: results.calcRows.map(({ row, result, exhaustType }) => ({
+                    name: row.name,
+                    categoryName: exhaustType?.name || row.categoryId,
+                    quantity: row.quantity ?? 0,
+                    unitType: result.unitType === 'm2' ? (isMetric ? 'm²' : 'ft²') : result.unitType,
+                    requiredExhaust: result.requiredExhaust ?? 'N/A',
+                    designExhaust: row.designExhaust ?? 0,
+                    status: result.status,
+                    airClass: result.airClass ?? 1,
+                    operationMode: row.operationMode || 'continuous'
+                  }))
+                });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white rounded-lg text-sm border border-slate-700 transition-colors cursor-pointer"
+              title="Export current exhaust calculation to CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
+              <span>Export CSV</span>
+            </button>
+            <button
+              id="add-exhaust-space-btn"
+              onClick={addRow}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Add Space
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4">
