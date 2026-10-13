@@ -65,6 +65,8 @@ export interface IntermediateValueRecord {
   readonly reference?: string;
 }
 
+export type StructuredComplianceDetermination = 'COMPLIANT' | 'NON_COMPLIANT' | 'NOT_VERIFIED';
+
 /**
  * Final engineering calculation result
  */
@@ -75,6 +77,7 @@ export interface FinalResultRecord {
   readonly unit: string;
   readonly isAuthoritative: boolean;
   readonly complianceSummary: string;
+  readonly complianceDetermination?: StructuredComplianceDetermination;
 }
 
 /**
@@ -108,6 +111,7 @@ export interface CalculationAuditRecord {
   readonly finalResult: FinalResultRecord;
   readonly validationStatus: ValidationStatus;
   readonly isApprovedForEngineeringUse: boolean;
+  readonly complianceDetermination?: StructuredComplianceDetermination;
   readonly warnings: string[];
   readonly unsupportedItems: string[];
   readonly timestamp: string;
@@ -129,9 +133,11 @@ export interface CreateAuditRecordParams {
     value: number | null;
     unit: string;
     complianceSummary?: string;
+    complianceDetermination?: StructuredComplianceDetermination;
   };
   validationStatus: ValidationStatus;
   authorityPolicy: AuditAuthorityPolicy;
+  complianceDetermination?: StructuredComplianceDetermination;
   authoritativeEligible?: boolean;
   warnings?: string[];
   unsupportedItems?: string[];
@@ -237,13 +243,34 @@ export class EngineeringAuditService {
       }
     }
 
+    // Rule 4: Structured Compliance Determination
+    // Explicit machine-readable determination:
+    // - Calculation FAIL or caller NON_COMPLIANT yields NON_COMPLIANT
+    // - Caller COMPLIANT requires validationStatus === 'PASS' AND isApprovedForEngineeringUse && isExplicitlyAuthoritative && !isDiagnostic
+    // - Legacy, omitted, diagnostic, or unverified records fail safe to NOT_VERIFIED
+    const requestedDetermination = params.complianceDetermination ?? params.finalResult.complianceDetermination;
+    let complianceDetermination: StructuredComplianceDetermination = 'NOT_VERIFIED';
+
+    if (validationStatus === 'FAIL' || requestedDetermination === 'NON_COMPLIANT') {
+      complianceDetermination = 'NON_COMPLIANT';
+    } else if (requestedDetermination === 'COMPLIANT') {
+      if (validationStatus === 'PASS' && isApprovedForEngineeringUse && isExplicitlyAuthoritative && !isDiagnostic) {
+        complianceDetermination = 'COMPLIANT';
+      } else {
+        complianceDetermination = 'NOT_VERIFIED';
+      }
+    } else {
+      complianceDetermination = 'NOT_VERIFIED';
+    }
+
     const finalResult: FinalResultRecord = {
       symbol: params.finalResult.symbol,
       name: params.finalResult.name,
       value: finalValue,
       unit: params.finalResult.unit,
       isAuthoritative,
-      complianceSummary
+      complianceSummary,
+      complianceDetermination
     };
 
     return {
@@ -260,6 +287,7 @@ export class EngineeringAuditService {
       finalResult,
       validationStatus,
       isApprovedForEngineeringUse,
+      complianceDetermination,
       warnings,
       unsupportedItems,
       timestamp: params.timestamp || new Date().toISOString()

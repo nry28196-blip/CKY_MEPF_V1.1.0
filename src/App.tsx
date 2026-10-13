@@ -105,6 +105,10 @@ import {
   getMechanicalBreadcrumbs,
   getMechanicalPageTitle
 } from './lib/navigationUtils';
+import {
+  evaluateComplianceDetermination,
+  isAuthoritativeProductionRun
+} from './lib/complianceHelper';
 
 export { DEFAULT_MECHANICAL_MODULES, MECHANICAL_MODULE_METADATA, SUB_SYSTEM_MODULES, SUBORDINATE_LABELS };
 export type { VentilationSubMode };
@@ -1236,20 +1240,10 @@ export default function App() {
     if (currentSub === 'ventilation') {
       if (currentModId === 'calculation') {
         const engineStatus = lastCalculationResult?.status;
-        const isAuthoritative = Boolean(lastCalculationResult?.isAuthoritative);
-        const isExplicitPositiveCompliance = (text: string | null | undefined): boolean => {
-          if (!text || typeof text !== 'string') return false;
-          const upper = text.toUpperCase();
-          if (upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('DIAGNOSTIC')) {
-            return false;
-          }
-          return /\bCOMPLIANT\b/.test(upper);
-        };
-        const hasCompliance = Boolean(
-          isExplicitPositiveCompliance(lastCalculationResult?.complianceSummary) ||
-          (Array.isArray(lastCalculationResult?.auditTrail) &&
-           lastCalculationResult.auditTrail.some((t: any) => isExplicitPositiveCompliance(t?.complianceSummary)))
-        );
+        const isAuthoritative = isAuthoritativeProductionRun(lastCalculationResult);
+        const complianceEval = evaluateComplianceDetermination(lastCalculationResult);
+        const hasCompliance = complianceEval.status === 'COMPLIANT';
+
         if (engineStatus === 'PASS') {
           return {
             status: 'PASS',
@@ -1354,20 +1348,10 @@ export default function App() {
 
       if (currentModId === 'reports') {
         const engineStatus = lastCalculationResult?.status;
-        const isAuthoritative = Boolean(lastCalculationResult?.isAuthoritative);
-        const isExplicitPositiveCompliance = (text: string | null | undefined): boolean => {
-          if (!text || typeof text !== 'string') return false;
-          const upper = text.toUpperCase();
-          if (upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('DIAGNOSTIC')) {
-            return false;
-          }
-          return /\bCOMPLIANT\b/.test(upper);
-        };
-        const hasCompliance = Boolean(
-          isExplicitPositiveCompliance(lastCalculationResult?.complianceSummary) ||
-          (Array.isArray(lastCalculationResult?.auditTrail) &&
-           lastCalculationResult.auditTrail.some((t: any) => isExplicitPositiveCompliance(t?.complianceSummary)))
-        );
+        const isAuthoritative = isAuthoritativeProductionRun(lastCalculationResult);
+        const complianceEval = evaluateComplianceDetermination(lastCalculationResult);
+        const hasCompliance = complianceEval.status === 'COMPLIANT';
+
         if (engineStatus === 'PASS') {
           return {
             status: 'PASS',

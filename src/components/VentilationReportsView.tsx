@@ -12,6 +12,29 @@ interface VentilationReportsViewProps {
   auditTrails?: any[];
 }
 
+import {
+  isAuthoritativeProductionRun,
+  evaluateComplianceDetermination,
+  extractComplianceCandidates,
+  ComplianceEvaluation
+} from '../lib/complianceHelper';
+import {
+  isExplicitNegativeCompliance,
+  isExplicitPositiveCompliance,
+  normalizeComplianceText,
+  parseComplianceString,
+  parseComplianceSummary
+} from '../lib/complianceUtils';
+
+export {
+  isExplicitNegativeCompliance,
+  isExplicitPositiveCompliance,
+  isAuthoritativeProductionRun,
+  normalizeComplianceText,
+  parseComplianceString,
+  parseComplianceSummary
+};
+
 export interface ComplianceDetermination {
   status: 'COMPLIANT' | 'NON-COMPLIANT' | 'Compliance Not Verified';
   color: string;
@@ -20,114 +43,97 @@ export interface ComplianceDetermination {
   hasNegativeComplianceContract: boolean;
 }
 
-export function isExplicitNegativeCompliance(text: string | null | undefined): boolean {
-  if (!text || typeof text !== 'string') return false;
-  const upper = text.toUpperCase();
-  return upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('NON COMPLIANT');
-}
-
-export function isExplicitPositiveCompliance(text: string | null | undefined): boolean {
-  if (!text || typeof text !== 'string') return false;
-  const upper = text.toUpperCase();
-  if (
-    upper.includes('NON-COMPLIANT') ||
-    upper.includes('NOT COMPLIANT') ||
-    upper.includes('NON COMPLIANT') ||
-    upper.includes('DIAGNOSTIC') ||
-    upper.includes('FAIL')
-  ) {
-    return false;
-  }
-  return /\bCOMPLIANT\b/.test(upper);
-}
-
 export function determineComplianceStatus(
   engineResult?: any,
   auditTrails: any[] = []
 ): ComplianceDetermination {
+  // 1. Gather compliance summary candidates from result and audit trail records
+  const candidates: string[] = [];
+  const addCandidate = (val: unknown) => {
+    if (typeof val === 'string' && val.trim().length > 0) {
+      candidates.push(val.trim());
+    }
+  };
+
+  addCandidate(engineResult?.complianceSummary);
+  addCandidate(engineResult?.complianceNotes);
+  addCandidate(engineResult?.auditRecord?.complianceSummary);
+  addCandidate(engineResult?.auditRecord?.finalResult?.complianceSummary);
+
+  if (Array.isArray(engineResult?.auditRecord?.complianceNotes)) {
+    engineResult.auditRecord.complianceNotes.forEach(addCandidate);
+  }
+
+  if (Array.isArray(engineResult?.auditTrail)) {
+    engineResult.auditTrail.forEach((item: any) => {
+      addCandidate(item?.complianceSummary);
+      if (Array.isArray(item?.complianceNotes)) {
+        item.complianceNotes.forEach(addCandidate);
+      } else {
+        addCandidate(item?.complianceNotes);
+      }
+    });
+  }
+
+  if (Array.isArray(engineResult?.auditRecord?.auditTrail)) {
+    engineResult.auditRecord.auditTrail.forEach((item: any) => {
+      addCandidate(item?.complianceSummary);
+      if (Array.isArray(item?.complianceNotes)) {
+        item.complianceNotes.forEach(addCandidate);
+      } else {
+        addCandidate(item?.complianceNotes);
+      }
+    });
+  }
+
+  if (Array.isArray(auditTrails)) {
+    auditTrails.forEach((item: any) => {
+      addCandidate(item?.complianceSummary);
+      if (Array.isArray(item?.complianceNotes)) {
+        item.complianceNotes.forEach(addCandidate);
+      } else {
+        addCandidate(item?.complianceNotes);
+      }
+    });
+  }
+
+  // 2. Parse candidates using the canonical parseComplianceSummary utility
+  const parsedItems = candidates.map(c => ({
+    raw: c,
+    parsed: parseComplianceSummary(c)
+  }));
+
+  const negativeCandidate = parsedItems.find(item => item.parsed.isNegative);
+  const positiveCandidate = parsedItems.find(item => item.parsed.isPositive);
+
+  // 3. Delegate to canonical evaluation contract to enforce authority, structured determination, and pass check
+  const evalResult: ComplianceEvaluation = evaluateComplianceDetermination(engineResult, auditTrails);
   const calculationStatus: string = engineResult?.status || 'INCOMPLETE';
   const isPass = calculationStatus === 'PASS';
 
-  const isAuthoritative = Boolean(
-    engineResult?.isAuthoritative ??
-    engineResult?.auditRecord?.finalResult?.isAuthoritative
-  );
-  const isApprovedForEngineeringUse = Boolean(
-    engineResult?.isApprovedForEngineeringUse ??
-    engineResult?.auditRecord?.isApprovedForEngineeringUse
-  );
-  const authorityPolicy = engineResult?.auditRecord?.authorityPolicy;
-  const isProductionAuthority = isPass && (isAuthoritative || isApprovedForEngineeringUse) && authorityPolicy !== 'DIAGNOSTIC';
-
-  const complianceSummaryCandidates: (string | null | undefined)[] = [
-    typeof engineResult?.complianceSummary === 'string' ? engineResult.complianceSummary : null,
-    typeof engineResult?.auditRecord?.finalResult?.complianceSummary === 'string'
-      ? engineResult.auditRecord.finalResult.complianceSummary
-      : null,
-    typeof engineResult?.auditRecord?.complianceSummary === 'string'
-      ? engineResult.auditRecord.complianceSummary
-      : null
-  ];
-
-  const allAuditEntries: any[] = [
-    ...(Array.isArray(auditTrails) ? auditTrails : []),
-    ...(Array.isArray(engineResult?.auditTrail) ? engineResult.auditTrail : []),
-    ...(Array.isArray(engineResult?.auditRecord?.auditTrail) ? engineResult.auditRecord.auditTrail : [])
-  ];
-
-  // Explicit check against complianceSummary or audit trail fields
-  const hasNegativeComplianceContract = Boolean(
-    complianceSummaryCandidates.some(s => isExplicitNegativeCompliance(s)) ||
-    allAuditEntries.some(t =>
-      t && (
-        isExplicitNegativeCompliance(t.complianceSummary) ||
-        (Array.isArray(t.complianceNotes) && t.complianceNotes.some((n: any) => isExplicitNegativeCompliance(n)))
-      )
-    )
-  );
-
-  const hasExplicitPositiveEvidence = Boolean(
-    complianceSummaryCandidates.some(s => isExplicitPositiveCompliance(s)) ||
-    allAuditEntries.some(t =>
-      t && (
-        isExplicitPositiveCompliance(t.complianceSummary) ||
-        (Array.isArray(t.complianceNotes) && t.complianceNotes.some((n: any) => isExplicitPositiveCompliance(n)))
-      )
-    )
-  );
-
-  // Positive compliance requires:
-  // 1. Calculation status is PASS (non-PASS cannot be compliant)
-  // 2. Authoritative production status (authorityPolicy is not DIAGNOSTIC)
-  // 3. No explicit negative compliance evidence
-  // 4. Explicit positive evidence in complianceSummary or audit trail fields
-  const hasExplicitComplianceContract = Boolean(
-    isPass &&
-    isProductionAuthority &&
-    !hasNegativeComplianceContract &&
-    hasExplicitPositiveEvidence
-  );
-
-  if (hasNegativeComplianceContract) {
+  // Explicit negative compliance strictly takes precedence
+  if (evalResult.status === 'NON-COMPLIANT' || negativeCandidate) {
     return {
       status: 'NON-COMPLIANT',
       color: 'text-red-400',
-      subtext: 'Explicit non-compliance in audit contract',
+      subtext: negativeCandidate?.raw || evalResult.primaryEvidenceText || 'Explicit non-compliance in audit contract',
       hasExplicitComplianceContract: false,
       hasNegativeComplianceContract: true
     };
   }
 
-  if (hasExplicitComplianceContract) {
+  // PASS does NOT automatically render as COMPLIANT without explicit evidence
+  if (evalResult.status === 'COMPLIANT') {
     return {
       status: 'COMPLIANT',
       color: 'text-emerald-400',
-      subtext: 'Verified per Table 6-1 VRP',
+      subtext: positiveCandidate?.raw || evalResult.primaryEvidenceText || 'Verified per Table 6-1 VRP',
       hasExplicitComplianceContract: true,
       hasNegativeComplianceContract: false
     };
   }
 
+  // Fallback / Unverified: calculation PASS without explicit contract remains Compliance Not Verified
   return {
     status: 'Compliance Not Verified',
     color: isPass ? 'text-amber-400' : 'text-slate-400',
@@ -173,16 +179,16 @@ export default function VentilationReportsView({
   }
 
   // 2. Real Authority Status from result / audit contract
-  const isAuthoritative = Boolean(
-    engineResult?.isAuthoritative ??
-    engineResult?.auditRecord?.finalResult?.isAuthoritative
-  );
-  const isApprovedForEngineeringUse = Boolean(
-    engineResult?.isApprovedForEngineeringUse ??
-    engineResult?.auditRecord?.isApprovedForEngineeringUse
-  );
-  const authorityPolicy = engineResult?.auditRecord?.authorityPolicy;
-  const isProductionAuthority = isPass && (isAuthoritative || isApprovedForEngineeringUse) && authorityPolicy !== 'DIAGNOSTIC';
+  // Strictly require authorityPolicy === 'AUTHORITATIVE_PRODUCTION' alongside a 'PASS' status.
+  // DIAGNOSTIC mode or missing policies result in 'Authority Not Verified'.
+  const auditAuthorityPolicy =
+    engineResult?.auditRecord?.authorityPolicy ??
+    engineResult?.authorityPolicy;
+
+  const isProductionAuthority =
+    isPass &&
+    auditAuthorityPolicy === 'AUTHORITATIVE_PRODUCTION' &&
+    isAuthoritativeProductionRun(engineResult);
 
   let authorityText = 'Preliminary / Pending Calculation';
   let authorityColor = 'text-amber-400';
@@ -190,6 +196,7 @@ export default function VentilationReportsView({
     authorityText = 'Authoritative Production';
     authorityColor = 'text-emerald-400';
   } else if (isPass) {
+    // PASS status with DIAGNOSTIC mode, missing authority policy, or unverified authority
     authorityText = 'Authority Not Verified';
     authorityColor = 'text-amber-400';
   } else if (isFail) {
@@ -198,10 +205,27 @@ export default function VentilationReportsView({
   } else if (isBlocked) {
     authorityText = 'Blocked / Unverified';
     authorityColor = 'text-rose-400';
+  } else if (isNotVerified) {
+    authorityText = 'Unverified Run';
+    authorityColor = 'text-fuchsia-400';
+  } else if (auditAuthorityPolicy === 'DIAGNOSTIC' || !auditAuthorityPolicy) {
+    authorityText = 'Authority Not Verified';
+    authorityColor = 'text-amber-400';
   }
 
   // 3. Real Compliance Determination from explicit result contract & audit trail
   const compliance = determineComplianceStatus(engineResult, auditTrails);
+
+  // Extract primary compliance summary from result or audit trail records
+  const allAuditRecords = [
+    ...(Array.isArray(engineResult?.auditTrail) ? engineResult.auditTrail : []),
+    ...(Array.isArray(engineResult?.auditRecord?.auditTrail) ? engineResult.auditRecord.auditTrail : []),
+    ...(Array.isArray(auditTrails) ? auditTrails : [])
+  ];
+
+  const auditTrailSummaryText = allAuditRecords.find(
+    (item: any) => typeof item?.complianceSummary === 'string' && item.complianceSummary.trim().length > 0
+  )?.complianceSummary || '';
 
   const primaryComplianceSummary =
     (typeof engineResult?.complianceSummary === 'string' ? engineResult.complianceSummary : null) ||
@@ -211,7 +235,9 @@ export default function VentilationReportsView({
     (typeof engineResult?.auditRecord?.complianceSummary === 'string'
       ? engineResult.auditRecord.complianceSummary
       : null) ||
-    '';
+    auditTrailSummaryText;
+
+  const parsedComplianceSummary = parseComplianceSummary(primaryComplianceSummary);
 
   const finalAirflow = typeof engineResult?.finalDesignOutdoorAir === 'number'
     ? engineResult.finalDesignOutdoorAir
@@ -306,12 +332,72 @@ export default function VentilationReportsView({
           </div>
         </div>
 
+        {/* Explicit Compliance Determination Banner & Callout */}
+        {!compliance.hasExplicitComplianceContract && !compliance.hasNegativeComplianceContract && (
+          <div className="mt-4 p-3.5 bg-amber-950/40 rounded-lg border border-amber-800/60 text-xs text-amber-200 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-amber-300">
+                Compliance Not Verified
+              </div>
+              <p className="text-[11px] text-amber-300/80 mt-0.5 leading-relaxed">
+                {isPass
+                  ? 'Calculation PASS solved the mathematical equations, but explicit compliance determination evidence or authoritative production sign-off is pending. Calculation PASS alone does not constitute compliance.'
+                  : 'Calculation inputs are incomplete or unverified. Standards compliance cannot be determined.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {compliance.hasNegativeComplianceContract && (
+          <div className="mt-4 p-3.5 bg-red-950/40 rounded-lg border border-red-800/60 text-xs text-red-200 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-red-300">
+                Non-Compliant Engineering Determination
+              </div>
+              <p className="text-[11px] text-red-300/80 mt-0.5 leading-relaxed">
+                {compliance.subtext || 'The calculation or audit trail records indicate non-compliance with prescriptive ASHRAE 62.1 requirements.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {compliance.hasExplicitComplianceContract && (
+          <div className="mt-4 p-3.5 bg-emerald-950/40 rounded-lg border border-emerald-800/60 text-xs text-emerald-200 flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-emerald-300">
+                Authoritative Compliance Verified
+              </div>
+              <p className="text-[11px] text-emerald-300/80 mt-0.5 leading-relaxed">
+                {compliance.subtext || 'Verified per ANSI/ASHRAE 62.1-2022 Table 6-1 VRP under authoritative production policy.'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Explicit Audit Contract Determination Summary */}
         {primaryComplianceSummary && (
-          <div className="mt-4 p-3 bg-slate-950/70 rounded-lg border border-slate-800 text-xs">
-            <span className="text-[10px] text-slate-500 uppercase font-mono block mb-1">
-              Governing Audit Contract Determination
-            </span>
+          <div className="mt-3 p-3 bg-slate-950/70 rounded-lg border border-slate-800 text-xs">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-slate-500 uppercase font-mono block">
+                Governing Audit Contract Determination
+              </span>
+              <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
+                parsedComplianceSummary.isNegative
+                  ? 'bg-red-950/60 border-red-800/60 text-red-400'
+                  : parsedComplianceSummary.isPositive
+                  ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400'
+                  : 'bg-amber-950/60 border-amber-800/60 text-amber-400'
+              }`}>
+                {parsedComplianceSummary.isNegative
+                  ? 'Non-Compliant'
+                  : parsedComplianceSummary.isPositive
+                  ? 'Compliance Evidence'
+                  : 'Compliance Not Verified'}
+              </span>
+            </div>
             <p className="text-slate-300 font-mono text-[11px] leading-relaxed">
               {primaryComplianceSummary}
             </p>

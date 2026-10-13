@@ -1,5 +1,9 @@
 import { jsPDF } from 'jspdf';
 import { ProjectContainer, HistoryItem } from '../types';
+import {
+  evaluateComplianceDetermination,
+  isAuthoritativeProductionRun
+} from './complianceHelper';
 
 /**
  * Extracts the honest engineering validation/run status from a HistoryItem.
@@ -52,40 +56,29 @@ export function extractRunStatusInfo(run: HistoryItem): {
   const isBlocked = status === 'BLOCKED';
   const isIncomplete = status === 'INCOMPLETE';
 
-  // Real authority from calculation result contract
-  const isAuthoritative = Boolean(
-    (lastCalc?.isAuthoritative ?? lastCalc?.auditRecord?.finalResult?.isAuthoritative) &&
-    isPass &&
-    lastCalc?.auditRecord?.authorityPolicy !== 'DIAGNOSTIC'
-  );
-
-  // Real compliance determination check: must NOT be inferred from PASS or authority alone
-  const complianceText =
-    (typeof lastCalc?.complianceSummary === 'string' ? lastCalc.complianceSummary : null) ||
-    (typeof lastCalc?.auditRecord?.finalResult?.complianceSummary === 'string'
-      ? lastCalc.auditRecord.finalResult.complianceSummary
-      : null);
-
-  const isExplicitPositiveCompliance = (text: string | null | undefined): boolean => {
-    if (!text || typeof text !== 'string') return false;
-    const upper = text.toUpperCase();
-    if (upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('DIAGNOSTIC')) {
-      return false;
-    }
-    return /\bCOMPLIANT\b/.test(upper);
+  // Construct effective evaluation object from lastCalc or parameters
+  const effectiveResult = lastCalc || {
+    status,
+    isAuthoritative: Boolean(params.isAuthoritative),
+    isApprovedForEngineeringUse: Boolean(params.isApprovedForEngineeringUse),
+    authorityPolicy: params.authorityPolicy,
+    complianceSummary: typeof params.complianceSummary === 'string' ? params.complianceSummary : undefined,
+    complianceDetermination: params.complianceDetermination,
+    auditTrail: Array.isArray(params.auditTrail) ? params.auditTrail : undefined,
+    auditRecord: params.auditRecord
   };
 
+  // Real authority from calculation result contract
+  // Strictly requires PASS and explicit AUTHORITATIVE_PRODUCTION policy
+  const isAuthoritative = isPass && isAuthoritativeProductionRun(effectiveResult);
+
+  // Real compliance determination via unified helper
+  const complianceEval = evaluateComplianceDetermination(effectiveResult);
   const hasCompliance = Boolean(
     isPass &&
     isAuthoritative &&
-    (
-      isExplicitPositiveCompliance(complianceText) ||
-      (Array.isArray(lastCalc?.auditTrail) &&
-       lastCalc.auditTrail.length > 0 &&
-       lastCalc.auditTrail.some((t: any) =>
-         t && typeof t.complianceSummary === 'string' && isExplicitPositiveCompliance(t.complianceSummary)
-       ))
-    )
+    complianceEval.status === 'COMPLIANT' &&
+    complianceEval.hasExplicitComplianceContract
   );
 
   return { status, isPass, isFail, isBlocked, isIncomplete, isAuthoritative, hasCompliance };
