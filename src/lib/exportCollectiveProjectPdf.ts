@@ -39,6 +39,8 @@ export function extractRunStatusInfo(run: HistoryItem): {
       rawStatus = 'BLOCKED';
     } else if (sumUpper.includes('STATUS: INCOMPLETE') || sumUpper.includes('AUDIT STATUS: INCOMPLETE')) {
       rawStatus = 'INCOMPLETE';
+    } else if (sumUpper.includes('STATUS: NOT_VERIFIED') || sumUpper.includes('AUDIT STATUS: NOT_VERIFIED') || sumUpper.includes('NOT VERIFIED')) {
+      rawStatus = 'NOT_VERIFIED';
     } else if (sumUpper.includes('DIAGNOSTIC ONLY') || sumUpper.includes('SIMPLIFIED MODEL')) {
       rawStatus = 'DIAGNOSTIC ONLY';
     }
@@ -49,13 +51,77 @@ export function extractRunStatusInfo(run: HistoryItem): {
   const isFail = status === 'FAIL';
   const isBlocked = status === 'BLOCKED';
   const isIncomplete = status === 'INCOMPLETE';
-  const isAuthoritative = Boolean(lastCalc?.isAuthoritative);
+
+  // Real authority from calculation result contract
+  const isAuthoritative = Boolean(
+    (lastCalc?.isAuthoritative ?? lastCalc?.auditRecord?.finalResult?.isAuthoritative) &&
+    isPass &&
+    lastCalc?.auditRecord?.authorityPolicy !== 'DIAGNOSTIC'
+  );
+
+  // Real compliance determination check: must NOT be inferred from PASS or authority alone
+  const complianceText =
+    (typeof lastCalc?.complianceSummary === 'string' ? lastCalc.complianceSummary : null) ||
+    (typeof lastCalc?.auditRecord?.finalResult?.complianceSummary === 'string'
+      ? lastCalc.auditRecord.finalResult.complianceSummary
+      : null);
+
+  const isExplicitPositiveCompliance = (text: string | null | undefined): boolean => {
+    if (!text || typeof text !== 'string') return false;
+    const upper = text.toUpperCase();
+    if (upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('DIAGNOSTIC')) {
+      return false;
+    }
+    return /\bCOMPLIANT\b/.test(upper);
+  };
+
   const hasCompliance = Boolean(
-    lastCalc?.complianceSummary?.includes('COMPLIANT') ||
-    (isPass && isAuthoritative)
+    isPass &&
+    isAuthoritative &&
+    (
+      isExplicitPositiveCompliance(complianceText) ||
+      (Array.isArray(lastCalc?.auditTrail) &&
+       lastCalc.auditTrail.length > 0 &&
+       lastCalc.auditTrail.some((t: any) =>
+         t && typeof t.complianceSummary === 'string' && isExplicitPositiveCompliance(t.complianceSummary)
+       ))
+    )
   );
 
   return { status, isPass, isFail, isBlocked, isIncomplete, isAuthoritative, hasCompliance };
+}
+
+/**
+ * Derives the honest collective aggregate status from a list of runs.
+ * Gated strictly on real contract states:
+ * - Any FAIL/BLOCKED/INCOMPLETE/NOT_VERIFIED prevents an aggregate PASS.
+ * - PASS / PRODUCTION VERIFIED requires that ALL runs are PASS, authoritative, and compliant.
+ * - Otherwise falls back to neutral PASS (CALCULATIONS VALID) or MULTI-RUN INVENTORY.
+ */
+export function deriveAggregateStatus(runStatuses: ReturnType<typeof extractRunStatusInfo>[]): string {
+  if (runStatuses.length === 0) {
+    return 'EMPTY (NO RUNS)';
+  }
+  const hasFail = runStatuses.some(r => r.isFail);
+  const hasBlocked = runStatuses.some(r => r.isBlocked);
+  const hasIncomplete = runStatuses.some(r => r.isIncomplete);
+  const hasNotVerified = runStatuses.some(r => r.status === 'NOT_VERIFIED');
+  const allPass = runStatuses.every(r => r.isPass);
+
+  if (hasFail) {
+    return 'FAIL (ATTENTION REQUIRED)';
+  } else if (hasBlocked) {
+    return 'BLOCKED';
+  } else if (hasIncomplete) {
+    return 'INCOMPLETE';
+  } else if (hasNotVerified) {
+    return 'NOT VERIFIED';
+  } else if (allPass) {
+    const allAuthAndCompliant = runStatuses.every(r => r.isAuthoritative && r.hasCompliance);
+    return allAuthAndCompliant ? 'PASS / PRODUCTION VERIFIED' : 'PASS (CALCULATIONS VALID)';
+  } else {
+    return 'MULTI-RUN INVENTORY';
+  }
 }
 
 export function exportCollectiveProjectPdf(project: ProjectContainer, runs: HistoryItem[]): void {
@@ -67,28 +133,7 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
 
   // Aggregate status derivation without inventing a global false PASS
   const runStatuses = runs.map(extractRunStatusInfo);
-  let overallStatusText = 'RECORDED';
-  if (runs.length === 0) {
-    overallStatusText = 'EMPTY (NO RUNS)';
-  } else {
-    const hasFail = runStatuses.some(r => r.isFail);
-    const hasBlocked = runStatuses.some(r => r.isBlocked);
-    const hasIncomplete = runStatuses.some(r => r.isIncomplete);
-    const allPass = runStatuses.every(r => r.isPass);
-
-    if (hasFail) {
-      overallStatusText = 'FAIL (ATTENTION REQUIRED)';
-    } else if (hasBlocked) {
-      overallStatusText = 'BLOCKED';
-    } else if (hasIncomplete) {
-      overallStatusText = 'INCOMPLETE';
-    } else if (allPass) {
-      const allAuth = runStatuses.every(r => r.isAuthoritative);
-      overallStatusText = allAuth ? 'PASS / PRODUCTION VERIFIED' : 'PASS (CALCULATIONS VALID)';
-    } else {
-      overallStatusText = 'MULTI-RUN INVENTORY';
-    }
-  }
+  const overallStatusText = deriveAggregateStatus(runStatuses);
 
   // -------------------------------------------------------------
   // PAGE 1: COVER & EXECUTIVE SUMMARY
@@ -221,7 +266,7 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
       pdf.setFont('helvetica', 'bold');
       if (runStatus.isPass) {
         pdf.setTextColor(22, 101, 52); // Emerald-800
-        pdf.text(runStatus.isAuthoritative ? 'PASS (VERIFIED)' : 'PASS', margin + 160, startY + 5.2);
+        pdf.text(runStatus.isAuthoritative && runStatus.hasCompliance ? 'PASS (VERIFIED)' : 'PASS', margin + 160, startY + 5.2);
       } else if (runStatus.isFail) {
         pdf.setTextColor(185, 28, 28); // Red-700
         pdf.text('FAIL', margin + 160, startY + 5.2);
@@ -231,6 +276,9 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
       } else if (runStatus.isIncomplete) {
         pdf.setTextColor(180, 83, 9); // Amber-700
         pdf.text('INCOMPLETE', margin + 160, startY + 5.2);
+      } else if (runStatus.status === 'NOT_VERIFIED') {
+        pdf.setTextColor(192, 38, 211); // Fuchsia-600
+        pdf.text('NOT VERIFIED', margin + 160, startY + 5.2);
       } else {
         pdf.setTextColor(100, 116, 139); // Slate-500
         pdf.text(runStatus.status.slice(0, 12), margin + 160, startY + 5.2);
@@ -395,10 +443,13 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
 
       if (cardRunStatus.hasCompliance) {
         pdf.setTextColor(22, 101, 52);
-        pdf.text('✓ CODE COMPLIANCE: VERIFIED (PASS)', margin + 4, cardY + cardHeight - 4.5);
+        pdf.text('✓ COMPLIANCE DETERMINATION: COMPLIANT', margin + 4, cardY + cardHeight - 4.5);
       } else if (cardRunStatus.isPass) {
         pdf.setTextColor(22, 101, 52);
-        pdf.text('• CALCULATION STATUS: PASS (PRELIMINARY / NON-VERIFIED AUTHORITY)', margin + 4, cardY + cardHeight - 4.5);
+        pdf.text(cardRunStatus.isAuthoritative
+          ? '• CALCULATION STATUS: PASS (AUTHORITATIVE PRODUCTION)'
+          : '• CALCULATION STATUS: PASS (PRELIMINARY / NON-VERIFIED AUTHORITY)',
+          margin + 4, cardY + cardHeight - 4.5);
       } else if (cardRunStatus.isFail) {
         pdf.setTextColor(185, 28, 28);
         pdf.text('✕ CALCULATION STATUS: FAIL (NON-COMPLIANT / OUT OF SPEC)', margin + 4, cardY + cardHeight - 4.5);
@@ -408,6 +459,9 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
       } else if (cardRunStatus.isIncomplete) {
         pdf.setTextColor(180, 83, 9);
         pdf.text('⚠ CALCULATION STATUS: INCOMPLETE (PARAMETERS REQUIRED)', margin + 4, cardY + cardHeight - 4.5);
+      } else if (cardRunStatus.status === 'NOT_VERIFIED') {
+        pdf.setTextColor(192, 38, 211);
+        pdf.text('⚠ CALCULATION STATUS: NOT VERIFIED (UNVERIFIED TABLES/INPUTS)', margin + 4, cardY + cardHeight - 4.5);
       } else {
         pdf.setTextColor(71, 85, 105);
         pdf.text(`• CALCULATION STATUS: ${cardRunStatus.status.toUpperCase()}`, margin + 4, cardY + cardHeight - 4.5);

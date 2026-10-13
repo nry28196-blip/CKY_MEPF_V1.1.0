@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download, Printer, ShieldCheck, CheckCircle2, Wind, Layers, Info } from 'lucide-react';
+import { FileText, Download, Printer, ShieldCheck, CheckCircle2, AlertCircle, AlertTriangle, Activity, Wind, Info } from 'lucide-react';
 import AuditTrailTable from './AuditTrailTable';
 import { exportVentilationToCsv } from '../lib/exportCsv';
 import { exportElementToPdf } from '../lib/exportPdf';
@@ -12,6 +12,133 @@ interface VentilationReportsViewProps {
   auditTrails?: any[];
 }
 
+export interface ComplianceDetermination {
+  status: 'COMPLIANT' | 'NON-COMPLIANT' | 'Compliance Not Verified';
+  color: string;
+  subtext: string;
+  hasExplicitComplianceContract: boolean;
+  hasNegativeComplianceContract: boolean;
+}
+
+export function isExplicitNegativeCompliance(text: string | null | undefined): boolean {
+  if (!text || typeof text !== 'string') return false;
+  const upper = text.toUpperCase();
+  return upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('NON COMPLIANT');
+}
+
+export function isExplicitPositiveCompliance(text: string | null | undefined): boolean {
+  if (!text || typeof text !== 'string') return false;
+  const upper = text.toUpperCase();
+  if (
+    upper.includes('NON-COMPLIANT') ||
+    upper.includes('NOT COMPLIANT') ||
+    upper.includes('NON COMPLIANT') ||
+    upper.includes('DIAGNOSTIC') ||
+    upper.includes('FAIL')
+  ) {
+    return false;
+  }
+  return /\bCOMPLIANT\b/.test(upper);
+}
+
+export function determineComplianceStatus(
+  engineResult?: any,
+  auditTrails: any[] = []
+): ComplianceDetermination {
+  const calculationStatus: string = engineResult?.status || 'INCOMPLETE';
+  const isPass = calculationStatus === 'PASS';
+
+  const isAuthoritative = Boolean(
+    engineResult?.isAuthoritative ??
+    engineResult?.auditRecord?.finalResult?.isAuthoritative
+  );
+  const isApprovedForEngineeringUse = Boolean(
+    engineResult?.isApprovedForEngineeringUse ??
+    engineResult?.auditRecord?.isApprovedForEngineeringUse
+  );
+  const authorityPolicy = engineResult?.auditRecord?.authorityPolicy;
+  const isProductionAuthority = isPass && (isAuthoritative || isApprovedForEngineeringUse) && authorityPolicy !== 'DIAGNOSTIC';
+
+  const complianceSummaryCandidates: (string | null | undefined)[] = [
+    typeof engineResult?.complianceSummary === 'string' ? engineResult.complianceSummary : null,
+    typeof engineResult?.auditRecord?.finalResult?.complianceSummary === 'string'
+      ? engineResult.auditRecord.finalResult.complianceSummary
+      : null,
+    typeof engineResult?.auditRecord?.complianceSummary === 'string'
+      ? engineResult.auditRecord.complianceSummary
+      : null
+  ];
+
+  const allAuditEntries: any[] = [
+    ...(Array.isArray(auditTrails) ? auditTrails : []),
+    ...(Array.isArray(engineResult?.auditTrail) ? engineResult.auditTrail : []),
+    ...(Array.isArray(engineResult?.auditRecord?.auditTrail) ? engineResult.auditRecord.auditTrail : [])
+  ];
+
+  // Explicit check against complianceSummary or audit trail fields
+  const hasNegativeComplianceContract = Boolean(
+    complianceSummaryCandidates.some(s => isExplicitNegativeCompliance(s)) ||
+    allAuditEntries.some(t =>
+      t && (
+        isExplicitNegativeCompliance(t.complianceSummary) ||
+        (Array.isArray(t.complianceNotes) && t.complianceNotes.some((n: any) => isExplicitNegativeCompliance(n)))
+      )
+    )
+  );
+
+  const hasExplicitPositiveEvidence = Boolean(
+    complianceSummaryCandidates.some(s => isExplicitPositiveCompliance(s)) ||
+    allAuditEntries.some(t =>
+      t && (
+        isExplicitPositiveCompliance(t.complianceSummary) ||
+        (Array.isArray(t.complianceNotes) && t.complianceNotes.some((n: any) => isExplicitPositiveCompliance(n)))
+      )
+    )
+  );
+
+  // Positive compliance requires:
+  // 1. Calculation status is PASS (non-PASS cannot be compliant)
+  // 2. Authoritative production status (authorityPolicy is not DIAGNOSTIC)
+  // 3. No explicit negative compliance evidence
+  // 4. Explicit positive evidence in complianceSummary or audit trail fields
+  const hasExplicitComplianceContract = Boolean(
+    isPass &&
+    isProductionAuthority &&
+    !hasNegativeComplianceContract &&
+    hasExplicitPositiveEvidence
+  );
+
+  if (hasNegativeComplianceContract) {
+    return {
+      status: 'NON-COMPLIANT',
+      color: 'text-red-400',
+      subtext: 'Explicit non-compliance in audit contract',
+      hasExplicitComplianceContract: false,
+      hasNegativeComplianceContract: true
+    };
+  }
+
+  if (hasExplicitComplianceContract) {
+    return {
+      status: 'COMPLIANT',
+      color: 'text-emerald-400',
+      subtext: 'Verified per Table 6-1 VRP',
+      hasExplicitComplianceContract: true,
+      hasNegativeComplianceContract: false
+    };
+  }
+
+  return {
+    status: 'Compliance Not Verified',
+    color: isPass ? 'text-amber-400' : 'text-slate-400',
+    subtext: isPass
+      ? 'Calculation PASS — Verification required'
+      : 'Compliance not verified',
+    hasExplicitComplianceContract: false,
+    hasNegativeComplianceContract: false
+  };
+}
+
 export default function VentilationReportsView({
   engineResult,
   zones = [],
@@ -21,14 +148,70 @@ export default function VentilationReportsView({
   const { unitSystem } = useUnit();
   const isMetric = unitSystem === 'metric';
 
-  const status = engineResult?.status || 'INCOMPLETE';
-  const isAuthoritative = Boolean(engineResult?.isAuthoritative);
-  const isPass = status === 'PASS';
-  const hasCompliance = Boolean(
-    engineResult?.complianceSummary?.includes('COMPLIANT') ||
-    engineResult?.auditTrail?.some((t: any) => t?.complianceSummary?.includes('COMPLIANT')) ||
-    (isPass && isAuthoritative)
+  // 1. Calculation Status
+  const calculationStatus: string = engineResult?.status || 'INCOMPLETE';
+  const isPass = calculationStatus === 'PASS';
+  const isFail = calculationStatus === 'FAIL';
+  const isBlocked = calculationStatus === 'BLOCKED';
+  const isIncomplete = calculationStatus === 'INCOMPLETE';
+  const isNotVerified = calculationStatus === 'NOT_VERIFIED';
+
+  let calcStatusColor = 'text-slate-400';
+  let calcStatusSub = 'Inputs incomplete';
+  if (isPass) {
+    calcStatusColor = 'text-emerald-400';
+    calcStatusSub = 'VRP calculation solved';
+  } else if (isFail) {
+    calcStatusColor = 'text-red-400';
+    calcStatusSub = 'Thresholds exceeded';
+  } else if (isBlocked) {
+    calcStatusColor = 'text-rose-400';
+    calcStatusSub = 'Prerequisites blocked';
+  } else if (isNotVerified) {
+    calcStatusColor = 'text-fuchsia-400';
+    calcStatusSub = 'Unverified run';
+  }
+
+  // 2. Real Authority Status from result / audit contract
+  const isAuthoritative = Boolean(
+    engineResult?.isAuthoritative ??
+    engineResult?.auditRecord?.finalResult?.isAuthoritative
   );
+  const isApprovedForEngineeringUse = Boolean(
+    engineResult?.isApprovedForEngineeringUse ??
+    engineResult?.auditRecord?.isApprovedForEngineeringUse
+  );
+  const authorityPolicy = engineResult?.auditRecord?.authorityPolicy;
+  const isProductionAuthority = isPass && (isAuthoritative || isApprovedForEngineeringUse) && authorityPolicy !== 'DIAGNOSTIC';
+
+  let authorityText = 'Preliminary / Pending Calculation';
+  let authorityColor = 'text-amber-400';
+  if (isProductionAuthority) {
+    authorityText = 'Authoritative Production';
+    authorityColor = 'text-emerald-400';
+  } else if (isPass) {
+    authorityText = 'Authority Not Verified';
+    authorityColor = 'text-amber-400';
+  } else if (isFail) {
+    authorityText = 'Non-Authoritative (Failed)';
+    authorityColor = 'text-red-400';
+  } else if (isBlocked) {
+    authorityText = 'Blocked / Unverified';
+    authorityColor = 'text-rose-400';
+  }
+
+  // 3. Real Compliance Determination from explicit result contract & audit trail
+  const compliance = determineComplianceStatus(engineResult, auditTrails);
+
+  const primaryComplianceSummary =
+    (typeof engineResult?.complianceSummary === 'string' ? engineResult.complianceSummary : null) ||
+    (typeof engineResult?.auditRecord?.finalResult?.complianceSummary === 'string'
+      ? engineResult.auditRecord.finalResult.complianceSummary
+      : null) ||
+    (typeof engineResult?.auditRecord?.complianceSummary === 'string'
+      ? engineResult.auditRecord.complianceSummary
+      : null) ||
+    '';
 
   const finalAirflow = typeof engineResult?.finalDesignOutdoorAir === 'number'
     ? engineResult.finalDesignOutdoorAir
@@ -74,7 +257,7 @@ export default function VentilationReportsView({
         </div>
 
         {/* Metadata summary bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 text-xs font-mono">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-5 text-xs font-mono">
           <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80">
             <span className="text-[10px] text-slate-500 uppercase block">Standard Basis</span>
             <span className="text-white font-bold">ANSI/ASHRAE 62.1-2022</span>
@@ -82,32 +265,39 @@ export default function VentilationReportsView({
           </div>
 
           <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80">
+            <span className="text-[10px] text-slate-500 uppercase block">Calculation Status</span>
+            <span className={`font-bold flex items-center gap-1.5 ${calcStatusColor}`}>
+              <Activity className="w-3.5 h-3.5" />
+              {calculationStatus.replace(/_/g, ' ')}
+            </span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">{calcStatusSub}</span>
+          </div>
+
+          <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80">
             <span className="text-[10px] text-slate-500 uppercase block">Engine Authority</span>
-            <span className={`font-bold flex items-center gap-1.5 ${
-              isPass && isAuthoritative ? 'text-emerald-400' : 'text-amber-400'
-            }`}>
+            <span className={`font-bold flex items-center gap-1.5 ${authorityColor}`}>
               <ShieldCheck className="w-3.5 h-3.5" />
-              {isPass && isAuthoritative
-                ? 'Authoritative Production'
-                : isPass
-                  ? 'Authority Not Verified'
-                  : 'Preliminary / Pending Calculation'}
+              {authorityText}
             </span>
             <span className="text-[10px] text-slate-400 block mt-0.5">Section 6.2 VRP</span>
           </div>
 
           <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80">
-            <span className="text-[10px] text-slate-500 uppercase block">Compliance State</span>
-            <span className={`font-bold flex items-center gap-1.5 ${
-              hasCompliance ? 'text-emerald-400' : status === 'FAIL' ? 'text-red-400' : 'text-amber-400'
-            }`}>
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {hasCompliance ? 'PASS (Compliant)' : `Status: ${status}`}
+            <span className="text-[10px] text-slate-500 uppercase block">Compliance Determination</span>
+            <span className={`font-bold flex items-center gap-1.5 ${compliance.color}`}>
+              {compliance.hasExplicitComplianceContract ? (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              ) : compliance.hasNegativeComplianceContract ? (
+                <AlertCircle className="w-3.5 h-3.5" />
+              ) : (
+                <AlertTriangle className="w-3.5 h-3.5" />
+              )}
+              {compliance.status}
             </span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">Table 6-1 VRP</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">{compliance.subtext}</span>
           </div>
 
-          <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80">
+          <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80 col-span-2 md:col-span-3 lg:col-span-1">
             <span className="text-[10px] text-slate-500 uppercase block">Total Required Outdoor Air</span>
             <span className="text-cyan-400 font-bold text-sm">
               {finalAirflow !== null ? `${finalAirflow.toFixed(1)} ${isMetric ? 'L/s' : 'cfm'}` : 'Not calculated'}
@@ -115,6 +305,18 @@ export default function VentilationReportsView({
             <span className="text-[10px] text-slate-400 block mt-0.5">Corrected for Eρ</span>
           </div>
         </div>
+
+        {/* Explicit Audit Contract Determination Summary */}
+        {primaryComplianceSummary && (
+          <div className="mt-4 p-3 bg-slate-950/70 rounded-lg border border-slate-800 text-xs">
+            <span className="text-[10px] text-slate-500 uppercase font-mono block mb-1">
+              Governing Audit Contract Determination
+            </span>
+            <p className="text-slate-300 font-mono text-[11px] leading-relaxed">
+              {primaryComplianceSummary}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Engineering Standards and Scope Statement */}

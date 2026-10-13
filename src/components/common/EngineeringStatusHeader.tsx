@@ -87,7 +87,7 @@ export default function EngineeringStatusHeader({ status, message, className = '
       <Icon className={`h-5 w-5 ${textColor}`} />
       <div className="flex flex-col">
         <span className={`text-xs font-bold uppercase tracking-wider ${textColor}`}>
-          {status.replace('_', ' ')}
+          {status.replace(/_/g, ' ')}
         </span>
         {message && (
           <span className={`text-[13px] ${textColor} opacity-90`}>

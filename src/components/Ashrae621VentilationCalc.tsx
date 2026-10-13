@@ -1100,7 +1100,7 @@ export default function Ashrae621VentilationCalc({
                 ) : (
                   <div className="mt-2.5 inline-flex items-center gap-1.5 text-xs text-amber-400 font-medium">
                     <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Calculation PASS — Preliminary / Authority Not Verified</span>
+                    <span>Calculation PASS — Authority Not Verified</span>
                   </div>
                 )
               ) : (

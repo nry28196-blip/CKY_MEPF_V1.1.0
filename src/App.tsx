@@ -1236,11 +1236,27 @@ export default function App() {
     if (currentSub === 'ventilation') {
       if (currentModId === 'calculation') {
         const engineStatus = lastCalculationResult?.status;
+        const isAuthoritative = Boolean(lastCalculationResult?.isAuthoritative);
+        const isExplicitPositiveCompliance = (text: string | null | undefined): boolean => {
+          if (!text || typeof text !== 'string') return false;
+          const upper = text.toUpperCase();
+          if (upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('DIAGNOSTIC')) {
+            return false;
+          }
+          return /\bCOMPLIANT\b/.test(upper);
+        };
+        const hasCompliance = Boolean(
+          isExplicitPositiveCompliance(lastCalculationResult?.complianceSummary) ||
+          (Array.isArray(lastCalculationResult?.auditTrail) &&
+           lastCalculationResult.auditTrail.some((t: any) => isExplicitPositiveCompliance(t?.complianceSummary)))
+        );
         if (engineStatus === 'PASS') {
           return {
             status: 'PASS',
             label: 'PASS',
-            message: 'All ASHRAE 62.1-2022 ventilation requirements verified'
+            message: isAuthoritative
+              ? (hasCompliance ? 'All ASHRAE 62.1-2022 ventilation requirements verified' : 'Calculation PASS — Production Authority Verified')
+              : 'Calculation PASS — Authority Not Verified'
           };
         }
         if (engineStatus === 'FAIL') {
@@ -1338,11 +1354,27 @@ export default function App() {
 
       if (currentModId === 'reports') {
         const engineStatus = lastCalculationResult?.status;
+        const isAuthoritative = Boolean(lastCalculationResult?.isAuthoritative);
+        const isExplicitPositiveCompliance = (text: string | null | undefined): boolean => {
+          if (!text || typeof text !== 'string') return false;
+          const upper = text.toUpperCase();
+          if (upper.includes('NON-COMPLIANT') || upper.includes('NOT COMPLIANT') || upper.includes('DIAGNOSTIC')) {
+            return false;
+          }
+          return /\bCOMPLIANT\b/.test(upper);
+        };
+        const hasCompliance = Boolean(
+          isExplicitPositiveCompliance(lastCalculationResult?.complianceSummary) ||
+          (Array.isArray(lastCalculationResult?.auditTrail) &&
+           lastCalculationResult.auditTrail.some((t: any) => isExplicitPositiveCompliance(t?.complianceSummary)))
+        );
         if (engineStatus === 'PASS') {
           return {
             status: 'PASS',
             label: 'PASS',
-            message: 'ASHRAE 62.1 compliance documentation verified'
+            message: isAuthoritative
+              ? (hasCompliance ? 'ASHRAE 62.1 compliance documentation verified' : 'Calculation PASS — Production Authority Verified')
+              : 'Calculation PASS — Authority Not Verified'
           };
         }
         if (engineStatus === 'FAIL') {
