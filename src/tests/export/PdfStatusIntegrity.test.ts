@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { extractRunStatusInfo, deriveAggregateStatus } from '../../lib/exportCollectiveProjectPdf';
+import {
+  extractRunStatusInfo,
+  deriveAggregateStatus,
+  aggregateComplianceFlags,
+  extractAttentionDetails,
+  exportCollectiveProjectPdf
+} from '../../lib/exportCollectiveProjectPdf';
 import { determineComplianceStatus } from '../../components/VentilationReportsView';
-import { HistoryItem } from '../../types';
+import { HistoryItem, ProjectContainer } from '../../types';
 
 describe('Step 4B — Strict Engineering Claim, Authority & Compliance Regression Suite', () => {
   it('1. PASS without an explicit compliance determination does not produce COMPLIANT', () => {
@@ -1177,6 +1183,285 @@ describe('Step 4B — Strict Engineering Claim, Authority & Compliance Regressio
       const reportCompliance = determineComplianceStatus(legacyRun.parameters.lastCalculationResult);
       expect(reportCompliance.status).toBe('Compliance Not Verified');
       expect(reportCompliance.hasExplicitComplianceContract).toBe(false);
+    });
+  });
+
+  describe('Step 4D — Collective PDF Summary Table & Flag Highlights Suite', () => {
+    const mockProject: ProjectContainer = {
+      id: 'proj-001',
+      name: 'Skyline Tower Level 10 MEP',
+      projectNumber: 'MEP-2026-SK10',
+      client: 'Acme Commercial Properties',
+      location: 'New York, NY',
+      engineer: 'Jane Doe, PE',
+      createdAt: '2026-10-14',
+      updatedAt: '2026-10-14',
+      runIds: [],
+      description: 'Complete mechanical and ventilation submittal package'
+    };
+
+    it('33. aggregateComplianceFlags returns 0 attention items when all runs are authoritative and compliant', () => {
+      const runs: HistoryItem[] = [
+        {
+          id: 'run-auth-1',
+          timestamp: '2026-10-14 10:00:00',
+          tab: 'mechanical',
+          title: 'Zone Outdoor Air Calculation',
+          summary: 'Outdoor air requirement: 85 L/s (Status: PASS)',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'COMPLIANT',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'COMPLIANT' }
+              }
+            }
+          }
+        },
+        {
+          id: 'run-auth-2',
+          timestamp: '2026-10-14 10:05:00',
+          tab: 'mechanical',
+          title: 'Simplified System Ventilation',
+          summary: 'System Outdoor Air: 240 L/s (Status: PASS)',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'COMPLIANT',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'COMPLIANT' }
+              }
+            }
+          }
+        }
+      ];
+
+      const summary = aggregateComplianceFlags(runs);
+      expect(summary.totalRuns).toBe(2);
+      expect(summary.compliantCount).toBe(2);
+      expect(summary.nonCompliantCount).toBe(0);
+      expect(summary.notVerifiedCount).toBe(0);
+      expect(summary.hasNonCompliant).toBe(false);
+      expect(summary.hasNotVerified).toBe(false);
+      expect(summary.hasAttentionItems).toBe(false);
+      expect(summary.attentionItems).toHaveLength(0);
+    });
+
+    it('34. aggregateComplianceFlags explicitly highlights calculation PASS with NON_COMPLIANT determination', () => {
+      const runs: HistoryItem[] = [
+        {
+          id: 'run-pass-non-comp',
+          timestamp: '2026-10-14 10:10:00',
+          tab: 'mechanical',
+          title: 'VAV System Sizing',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'NON_COMPLIANT',
+              complianceSummary: 'NON-COMPLIANT: Minimum primary airflow does not satisfy ASHRAE 62.1-2022 Eq. 6-6',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'NON_COMPLIANT' }
+              }
+            }
+          }
+        }
+      ];
+
+      const summary = aggregateComplianceFlags(runs);
+      expect(summary.totalRuns).toBe(1);
+      expect(summary.nonCompliantCount).toBe(1);
+      expect(summary.notVerifiedCount).toBe(0);
+      expect(summary.hasNonCompliant).toBe(true);
+      expect(summary.hasAttentionItems).toBe(true);
+      expect(summary.attentionItems).toHaveLength(1);
+
+      const item = summary.attentionItems[0];
+      expect(item.index).toBe(1);
+      expect(item.runId).toBe('run-pass-non-comp');
+      expect(item.discipline).toBe('MECHANICAL');
+      expect(item.calculationStatus).toBe('PASS');
+      expect(item.complianceFlag).toBe('NON_COMPLIANT');
+      expect(item.statusText).toBe('PASS / NON-COMPLIANT');
+      expect(item.details.toLowerCase()).toContain('non-compliant');
+    });
+
+    it('35. aggregateComplianceFlags aggregates unverified calculation states into NOT_VERIFIED attention rows', () => {
+      const runs: HistoryItem[] = [
+        {
+          id: 'run-unverified-calc',
+          timestamp: '2026-10-14 10:15:00',
+          tab: 'mechanical',
+          title: 'Preliminary Outdoor Air',
+          summary: 'Status: NOT_VERIFIED',
+          parameters: {
+            lastCalculationResult: {
+              status: 'NOT_VERIFIED',
+              isAuthoritative: false
+            }
+          }
+        },
+        {
+          id: 'run-blocked-calc',
+          timestamp: '2026-10-14 10:20:00',
+          tab: 'plumbing',
+          title: 'Domestic Water Sizing',
+          summary: 'Status: BLOCKED',
+          parameters: {
+            status: 'BLOCKED'
+          }
+        },
+        {
+          id: 'run-incomplete-calc',
+          timestamp: '2026-10-14 10:25:00',
+          tab: 'mechanical',
+          title: 'Exhaust Rate Calculation',
+          summary: 'Status: INCOMPLETE',
+          parameters: {
+            exhaustStatus: 'INCOMPLETE'
+          }
+        },
+        {
+          id: 'run-pass-unverified-comp',
+          timestamp: '2026-10-14 10:30:00',
+          tab: 'electrical',
+          title: 'Feeder Sizing',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: false
+            }
+          }
+        }
+      ];
+
+      const summary = aggregateComplianceFlags(runs);
+      expect(summary.totalRuns).toBe(4);
+      expect(summary.compliantCount).toBe(0);
+      expect(summary.nonCompliantCount).toBe(0);
+      expect(summary.notVerifiedCount).toBe(4);
+      expect(summary.hasNotVerified).toBe(true);
+      expect(summary.hasAttentionItems).toBe(true);
+      expect(summary.attentionItems).toHaveLength(4);
+
+      summary.attentionItems.forEach(item => {
+        expect(item.complianceFlag).toBe('NOT_VERIFIED');
+      });
+    });
+
+    it('36. aggregateComplianceFlags handles mixed batches with correct counts, flag precedence, and index ordering', () => {
+      const mixedRuns: HistoryItem[] = [
+        {
+          id: 'm-1-compliant',
+          timestamp: '2026-10-14 10:00:00',
+          tab: 'mechanical',
+          title: 'Compliant Zone',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'COMPLIANT',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'COMPLIANT' }
+              }
+            }
+          }
+        },
+        {
+          id: 'm-2-non-compliant',
+          timestamp: '2026-10-14 10:05:00',
+          tab: 'mechanical',
+          title: 'Failed Exhaust Sizing',
+          summary: 'Status: FAIL',
+          parameters: {
+            exhaustStatus: 'FAIL'
+          }
+        },
+        {
+          id: 'm-3-unverified',
+          timestamp: '2026-10-14 10:10:00',
+          tab: 'plumbing',
+          title: 'Water Supply Demand',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true
+              // Missing compliance determination -> unverified
+            }
+          }
+        }
+      ];
+
+      const summary = aggregateComplianceFlags(mixedRuns);
+      expect(summary.totalRuns).toBe(3);
+      expect(summary.compliantCount).toBe(1);
+      expect(summary.nonCompliantCount).toBe(1);
+      expect(summary.notVerifiedCount).toBe(1);
+      expect(summary.hasNonCompliant).toBe(true);
+      expect(summary.hasNotVerified).toBe(true);
+      expect(summary.hasAttentionItems).toBe(true);
+      expect(summary.attentionItems).toHaveLength(2);
+
+      // Attention items preserve 1-based index corresponding to submittal order
+      expect(summary.attentionItems[0].index).toBe(2);
+      expect(summary.attentionItems[0].complianceFlag).toBe('NON_COMPLIANT');
+
+      expect(summary.attentionItems[1].index).toBe(3);
+      expect(summary.attentionItems[1].complianceFlag).toBe('NOT_VERIFIED');
+    });
+
+    it('37. exportCollectiveProjectPdf compiles document with summary table at beginning without errors', () => {
+      const runs: HistoryItem[] = [
+        {
+          id: 'pdf-run-1',
+          timestamp: '2026-10-14 11:00:00',
+          tab: 'mechanical',
+          title: 'Zone Calculation With Warning',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'NON_COMPLIANT',
+              complianceSummary: 'NON-COMPLIANT: Design airflow 15 L/s below required 22 L/s'
+            }
+          }
+        },
+        {
+          id: 'pdf-run-2',
+          timestamp: '2026-10-14 11:05:00',
+          tab: 'electrical',
+          title: 'Panelboard Load Calc',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: false
+            }
+          }
+        }
+      ];
+
+      const doc = exportCollectiveProjectPdf(mockProject, runs);
+      expect(doc).toBeDefined();
+      expect(typeof doc.getNumberOfPages).toBe('function');
+      expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(2);
+    });
+
+    it('38. exportCollectiveProjectPdf succeeds cleanly on empty project container with 0 runs', () => {
+      const doc = exportCollectiveProjectPdf(mockProject, []);
+      expect(doc).toBeDefined();
+      expect(doc.getNumberOfPages()).toBe(1);
     });
   });
 });

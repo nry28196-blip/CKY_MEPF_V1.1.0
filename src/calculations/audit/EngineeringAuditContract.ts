@@ -138,6 +138,7 @@ export interface CreateAuditRecordParams {
   validationStatus: ValidationStatus;
   authorityPolicy: AuditAuthorityPolicy;
   complianceDetermination?: StructuredComplianceDetermination;
+  complianceSummary?: string;
   authoritativeEligible?: boolean;
   warnings?: string[];
   unsupportedItems?: string[];
@@ -224,7 +225,7 @@ export class EngineeringAuditService {
       finalValue = null; // Non-PASS or unapproved omitted authority withholds numeric result
     }
 
-    let complianceSummary = params.finalResult.complianceSummary;
+    let complianceSummary = params.complianceSummary ?? params.finalResult.complianceSummary;
     if (params.authorityPolicy === 'DIAGNOSTIC' || isDiagnostic) {
       if (!complianceSummary) {
         complianceSummary = `DIAGNOSTIC (${validationStatus}): Non-authoritative engineering diagnostic utility only. Not approved for official code compliance or engineering sign-off.`;
@@ -245,15 +246,20 @@ export class EngineeringAuditService {
 
     // Rule 4: Structured Compliance Determination
     // Explicit machine-readable determination:
-    // - Calculation FAIL or caller NON_COMPLIANT yields NON_COMPLIANT
+    // - Calculation FAIL or any caller NON_COMPLIANT yields NON_COMPLIANT
     // - Caller COMPLIANT requires validationStatus === 'PASS' AND isApprovedForEngineeringUse && isExplicitlyAuthoritative && !isDiagnostic
+    // - Negative evidence strictly overrides any positive structured determination
     // - Legacy, omitted, diagnostic, or unverified records fail safe to NOT_VERIFIED
-    const requestedDetermination = params.complianceDetermination ?? params.finalResult.complianceDetermination;
+    const requestedTop = params.complianceDetermination;
+    const requestedFinal = params.finalResult.complianceDetermination;
+    const hasNegativeRequested = requestedTop === 'NON_COMPLIANT' || requestedFinal === 'NON_COMPLIANT';
+    const hasPositiveRequested = (requestedTop === 'COMPLIANT' || requestedFinal === 'COMPLIANT') && !hasNegativeRequested;
+
     let complianceDetermination: StructuredComplianceDetermination = 'NOT_VERIFIED';
 
-    if (validationStatus === 'FAIL' || requestedDetermination === 'NON_COMPLIANT') {
+    if (validationStatus === 'FAIL' || hasNegativeRequested) {
       complianceDetermination = 'NON_COMPLIANT';
-    } else if (requestedDetermination === 'COMPLIANT') {
+    } else if (hasPositiveRequested) {
       if (validationStatus === 'PASS' && isApprovedForEngineeringUse && isExplicitlyAuthoritative && !isDiagnostic) {
         complianceDetermination = 'COMPLIANT';
       } else {
@@ -407,6 +413,9 @@ export class EngineeringAuditService {
       { symbol: 'Eρ', name: 'Air Density Correction Factor', value: result.epDensity ?? 1.0, unit: 'dimensionless', reference: 'Table 6-5 / Addendum j' }
     ];
 
+    const callerDetermination = (result as any)?.complianceDetermination ?? (input as any)?.complianceDetermination;
+    const callerSummary = (result as any)?.complianceSummary ?? (input as any)?.complianceSummary;
+
     return this.createAuditRecord({
       system: 'Ventilation',
       standard: input.expectedStandard || 'ASHRAE 62.1',
@@ -434,8 +443,12 @@ export class EngineeringAuditService {
         symbol: 'Voz',
         name: 'Zone Outdoor Airflow',
         value: result.voz,
-        unit: 'L/s'
+        unit: 'L/s',
+        complianceSummary: callerSummary,
+        complianceDetermination: callerDetermination
       },
+      complianceDetermination: callerDetermination,
+      complianceSummary: callerSummary,
       validationStatus: result.status
     });
   }
@@ -502,6 +515,9 @@ export class EngineeringAuditService {
       { symbol: 'Ev', name: 'System Ventilation Efficiency', value: result.ev, unit: 'dimensionless' }
     ];
 
+    const callerDetermination = (result as any)?.complianceDetermination ?? (input as any)?.complianceDetermination;
+    const callerSummary = (result as any)?.complianceSummary ?? (input as any)?.complianceSummary;
+
     return this.createAuditRecord({
       system: 'Ventilation',
       standard: 'ASHRAE 62.1',
@@ -525,8 +541,12 @@ export class EngineeringAuditService {
         symbol: 'Vot',
         name: 'Outdoor Air Intake Flow',
         value: result.vot,
-        unit: 'L/s'
+        unit: 'L/s',
+        complianceSummary: callerSummary,
+        complianceDetermination: callerDetermination
       },
+      complianceDetermination: callerDetermination,
+      complianceSummary: callerSummary,
       validationStatus: result.status
     });
   }
@@ -592,6 +612,9 @@ export class EngineeringAuditService {
       { symbol: 'Ev', name: 'System Ventilation Efficiency', value: result.ev, unit: 'dimensionless' }
     ];
 
+    const callerAltDetermination = (result as any)?.complianceDetermination ?? (input as any)?.complianceDetermination;
+    const callerAltSummary = (result as any)?.complianceSummary ?? (input as any)?.complianceSummary;
+
     return this.createAuditRecord({
       system: 'Ventilation',
       standard: 'ASHRAE 62.1',
@@ -615,8 +638,12 @@ export class EngineeringAuditService {
         symbol: 'Vot',
         name: 'Outdoor Air Intake Flow',
         value: result.vot,
-        unit: 'L/s'
+        unit: 'L/s',
+        complianceSummary: callerAltSummary,
+        complianceDetermination: callerAltDetermination
       },
+      complianceDetermination: callerAltDetermination,
+      complianceSummary: callerAltSummary,
       validationStatus: result.status
     });
   }
@@ -697,6 +724,9 @@ export class EngineeringAuditService {
 
     const isPerformance = result.compliancePath === 'PERFORMANCE' || result.pathStatus === 'PERFORMANCE_PATH_UNIMPLEMENTED';
 
+    const callerExhDetermination = (result as any)?.complianceDetermination ?? (input as any)?.complianceDetermination;
+    const callerExhSummary = (result as any)?.complianceSummary ?? result.complianceNotes?.join(' ');
+
     return this.createAuditRecord({
       system: 'Ventilation',
       standard: input.expectedStandard || 'ASHRAE 62.1',
@@ -722,8 +752,11 @@ export class EngineeringAuditService {
         name: 'Minimum Prescriptive Exhaust Airflow',
         value: result.requiredExhaust,
         unit: input.unitSystem === 'ip' ? 'cfm' : 'L/s',
-        complianceSummary: result.complianceNotes?.join(' ')
+        complianceSummary: callerExhSummary,
+        complianceDetermination: callerExhDetermination
       },
+      complianceDetermination: callerExhDetermination,
+      complianceSummary: callerExhSummary,
       validationStatus: result.status,
       warnings: result.instructionalMessage ? [result.instructionalMessage] : []
     });

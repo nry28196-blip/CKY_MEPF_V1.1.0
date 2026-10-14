@@ -3,7 +3,7 @@ import { DensityCorrectionService, DensityInput, DensityResult } from './Density
 import { ValidationStatus, VentilationValidationService } from '../calculations/ventilation/VentilationValidationService';
 import { Ashrae621SimplifiedSystemService, SimplifiedSystemInput, SimplifiedSystemResult } from '../calculations/ventilation/Ashrae621SimplifiedSystemService';
 import { Ashrae621AlternativeSystemService, AlternativeSystemInput, AlternativeSystemResult } from '../calculations/ventilation/Ashrae621AlternativeSystemService';
-import { CalculationAuditRecord, EngineeringAuditService } from '../calculations/audit/EngineeringAuditContract';
+import { CalculationAuditRecord, EngineeringAuditService, StructuredComplianceDetermination } from '../calculations/audit/EngineeringAuditContract';
 import { EngineeringValidationLogger } from '../calculations/validation/EngineeringValidationLogger';
 
 export interface SingleZoneInput {
@@ -24,6 +24,8 @@ export interface SingleZoneResult {
   auditRecord?: CalculationAuditRecord;
   isAuthoritative?: boolean;
   isApprovedForEngineeringUse?: boolean;
+  complianceDetermination?: StructuredComplianceDetermination;
+  complianceSummary?: string;
 }
 
 export interface MultiZoneInput {
@@ -59,6 +61,8 @@ export interface MultiZoneResult {
   auditRecord?: CalculationAuditRecord;
   isAuthoritative?: boolean;
   isApprovedForEngineeringUse?: boolean;
+  complianceDetermination?: StructuredComplianceDetermination;
+  complianceSummary?: string;
 }
 
 export class VentilationEngine {
@@ -318,7 +322,9 @@ export class VentilationEngine {
       status,
       auditRecord,
       isAuthoritative: isAuth,
-      isApprovedForEngineeringUse: isApproved
+      isApprovedForEngineeringUse: isApproved,
+      complianceDetermination: auditRecord?.complianceDetermination,
+      complianceSummary: auditRecord?.finalResult?.complianceSummary
     };
   }
 
@@ -636,7 +642,9 @@ export class VentilationEngine {
       status: finalStatus,
       auditRecord,
       isAuthoritative,
-      isApprovedForEngineeringUse
+      isApprovedForEngineeringUse,
+      complianceDetermination: auditRecord?.complianceDetermination,
+      complianceSummary: auditRecord?.finalResult?.complianceSummary
     };
   }
 }

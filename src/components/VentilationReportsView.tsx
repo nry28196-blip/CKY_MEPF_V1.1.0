@@ -239,6 +239,30 @@ export default function VentilationReportsView({
 
   const parsedComplianceSummary = parseComplianceSummary(primaryComplianceSummary);
 
+  // Unified single source of truth for Governing Determination
+  let governingBadgeText = 'Compliance Not Verified';
+  let governingBadgeStyle = 'bg-amber-950/60 border-amber-800/60 text-amber-400';
+  let governingDisplayText = primaryComplianceSummary || 'No explicit compliance contract recorded.';
+
+  if (compliance.hasNegativeComplianceContract) {
+    governingBadgeText = 'Non-Compliant';
+    governingBadgeStyle = 'bg-red-950/60 border-red-800/60 text-red-400';
+    // Priority: Display the genuine negative evidence, never hide it behind positive text
+    governingDisplayText = compliance.subtext || primaryComplianceSummary;
+  } else if (compliance.hasExplicitComplianceContract) {
+    governingBadgeText = 'Compliance Evidence';
+    governingBadgeStyle = 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400';
+    governingDisplayText = primaryComplianceSummary || compliance.subtext;
+  } else {
+    governingBadgeText = 'Compliance Not Verified';
+    governingBadgeStyle = 'bg-amber-950/60 border-amber-800/60 text-amber-400';
+    if (parsedComplianceSummary.isPositive && !compliance.hasExplicitComplianceContract) {
+      governingDisplayText = `${primaryComplianceSummary} (Notice: Preliminary wording is unverified and pending authoritative sign-off)`;
+    } else {
+      governingDisplayText = primaryComplianceSummary || 'Calculation PASS — Explicit compliance contract not verified.';
+    }
+  }
+
   const finalAirflow = typeof engineResult?.finalDesignOutdoorAir === 'number'
     ? engineResult.finalDesignOutdoorAir
     : null;
@@ -378,28 +402,18 @@ export default function VentilationReportsView({
         )}
 
         {/* Explicit Audit Contract Determination Summary */}
-        {primaryComplianceSummary && (
+        {governingDisplayText && (
           <div className="mt-3 p-3 bg-slate-950/70 rounded-lg border border-slate-800 text-xs">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] text-slate-500 uppercase font-mono block">
                 Governing Audit Contract Determination
               </span>
-              <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
-                parsedComplianceSummary.isNegative
-                  ? 'bg-red-950/60 border-red-800/60 text-red-400'
-                  : parsedComplianceSummary.isPositive
-                  ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400'
-                  : 'bg-amber-950/60 border-amber-800/60 text-amber-400'
-              }`}>
-                {parsedComplianceSummary.isNegative
-                  ? 'Non-Compliant'
-                  : parsedComplianceSummary.isPositive
-                  ? 'Compliance Evidence'
-                  : 'Compliance Not Verified'}
+              <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${governingBadgeStyle}`}>
+                {governingBadgeText}
               </span>
             </div>
             <p className="text-slate-300 font-mono text-[11px] leading-relaxed">
-              {primaryComplianceSummary}
+              {governingDisplayText}
             </p>
           </div>
         )}
