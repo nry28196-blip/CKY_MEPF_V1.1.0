@@ -12,8 +12,10 @@ export interface RunStatusInfo {
   isBlocked: boolean;
   isIncomplete: boolean;
   isAuthoritative: boolean;
+  authorityText: string;
   hasCompliance: boolean;
   complianceStatus: string;
+  complianceText: string;
   isNonCompliant: boolean;
   isComplianceVerified: boolean;
   rowStatusText: string;
@@ -88,6 +90,26 @@ export function extractRunStatusInfo(run: HistoryItem): RunStatusInfo {
     isComplianceVerified
   );
 
+  // Engineering authority text
+  let authorityText = 'PRELIMINARY';
+  if (isAuthoritative) {
+    authorityText = 'AUTHORITATIVE';
+  } else if (isFail || isBlocked) {
+    authorityText = 'NOT APPROVED';
+  } else if (status === 'NOT_VERIFIED') {
+    authorityText = 'UNVERIFIED';
+  }
+
+  // Compliance determination text
+  let complianceText = 'NOT VERIFIED';
+  if (isNonCompliant) {
+    complianceText = 'NON-COMPLIANT';
+  } else if (complianceStatus === 'COMPLIANT' && complianceEval.hasExplicitComplianceContract) {
+    complianceText = 'COMPLIANT';
+  } else {
+    complianceText = 'NOT VERIFIED';
+  }
+
   let rowStatusText = status;
   if (isPass) {
     if (isNonCompliant) {
@@ -114,8 +136,10 @@ export function extractRunStatusInfo(run: HistoryItem): RunStatusInfo {
     isBlocked,
     isIncomplete,
     isAuthoritative,
+    authorityText,
     hasCompliance,
     complianceStatus,
+    complianceText,
     isNonCompliant,
     isComplianceVerified,
     rowStatusText
@@ -128,6 +152,8 @@ export interface ComplianceAttentionItem {
   discipline: string;
   title: string;
   calculationStatus: string;
+  authority: string;
+  complianceDetermination: string;
   complianceFlag: 'NON_COMPLIANT' | 'NOT_VERIFIED';
   statusText: string;
   details: string;
@@ -197,8 +223,7 @@ export function aggregateComplianceFlags(runs: HistoryItem[]): CollectiveComplia
     const statusInfo = extractRunStatusInfo(run);
     const isNonCompliant = statusInfo.isNonCompliant ||
       statusInfo.complianceStatus === 'NON-COMPLIANT' ||
-      statusInfo.status === 'FAIL' ||
-      statusInfo.rowStatusText.includes('NON-COMPLIANT');
+      statusInfo.status === 'FAIL';
 
     if (isNonCompliant) {
       nonCompliantCount++;
@@ -208,6 +233,8 @@ export function aggregateComplianceFlags(runs: HistoryItem[]): CollectiveComplia
         discipline: (run.tab || 'MEP').toUpperCase(),
         title: run.title,
         calculationStatus: statusInfo.status,
+        authority: statusInfo.authorityText,
+        complianceDetermination: statusInfo.complianceText,
         complianceFlag: 'NON_COMPLIANT',
         statusText: statusInfo.rowStatusText,
         details: extractAttentionDetails(run, statusInfo)
@@ -217,9 +244,7 @@ export function aggregateComplianceFlags(runs: HistoryItem[]): CollectiveComplia
         statusInfo.complianceStatus === 'Compliance Not Verified' ||
         !statusInfo.hasCompliance ||
         statusInfo.isBlocked ||
-        statusInfo.isIncomplete ||
-        statusInfo.rowStatusText.includes('UNVERIFIED') ||
-        statusInfo.rowStatusText === 'NOT VERIFIED';
+        statusInfo.isIncomplete;
 
       if (isUnverified) {
         notVerifiedCount++;
@@ -229,6 +254,8 @@ export function aggregateComplianceFlags(runs: HistoryItem[]): CollectiveComplia
           discipline: (run.tab || 'MEP').toUpperCase(),
           title: run.title,
           calculationStatus: statusInfo.status,
+          authority: statusInfo.authorityText,
+          complianceDetermination: statusInfo.complianceText,
           complianceFlag: 'NOT_VERIFIED',
           statusText: statusInfo.rowStatusText,
           details: extractAttentionDetails(run, statusInfo)
@@ -415,23 +442,43 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
     );
     startY += 9;
 
-    // Summary Table Header
-    pdf.setFillColor(isAlert ? 153 : 180, isAlert ? 27 : 83, isAlert ? 27 : 9);
-    pdf.rect(margin, startY, contentWidth, 6, 'F');
+    // Summary Table Header: Discrete Columns
+    const drawAttentionTableHeader = (y: number) => {
+      pdf.setFillColor(isAlert ? 153 : 180, isAlert ? 27 : 83, isAlert ? 27 : 9);
+      pdf.rect(margin, y, contentWidth, 6, 'F');
 
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(7);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text('#', margin + 2, startY + 4.2);
-    pdf.text('DISCIPLINE', margin + 8, startY + 4.2);
-    pdf.text('CALCULATION TITLE', margin + 30, startY + 4.2);
-    pdf.text('CALC STATUS', margin + 80, startY + 4.2);
-    pdf.text('AUDIT FLAG', margin + 110, startY + 4.2);
-    pdf.text('AUDIT FINDING & SUBMITTAL ACTION', margin + 140, startY + 4.2);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('#', margin + 2, y + 4.2);
+      pdf.text('DISCIPLINE', margin + 7, y + 4.2);
+      pdf.text('CALCULATION TITLE', margin + 24, y + 4.2);
+      pdf.text('CALCULATION STATUS', margin + 56, y + 4.2);
+      pdf.text('ENGINEERING AUTHORITY', margin + 86, y + 4.2);
+      pdf.text('COMPLIANCE DETERMINATION', margin + 120, y + 4.2);
+      pdf.text('AUDIT FINDING & ACTION', margin + 154, y + 4.2);
+    };
+
+    drawAttentionTableHeader(startY);
     startY += 6;
 
-    // Highlighted Summary Rows
+    // Highlighted Summary Rows with Discrete Columns
     complianceSummary.attentionItems.forEach((item) => {
+      if (startY + 7 > pageHeight - 25) {
+        pdf.addPage();
+        pdf.setFillColor(8, 145, 178);
+        pdf.rect(0, 0, pageWidth, 4, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(`PROJECT: ${project.name.toUpperCase()} (ATTENTION AUDIT CONTINUED)`, margin, 12);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.line(margin, 14, pageWidth - margin, 14);
+        startY = 18;
+        drawAttentionTableHeader(startY);
+        startY += 6;
+      }
+
       const isItemNonComp = item.complianceFlag === 'NON_COMPLIANT';
       pdf.setFillColor(isItemNonComp ? 254 : 255, isItemNonComp ? 242 : 251, isItemNonComp ? 242 : 235);
       pdf.setDrawColor(isItemNonComp ? 252 : 253, isItemNonComp ? 165 : 230, isItemNonComp ? 165 : 138);
@@ -449,29 +496,59 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
       else if (item.discipline === 'ELECTRICAL') pdf.setTextColor(234, 88, 12);
       else if (item.discipline === 'FIRE') pdf.setTextColor(225, 29, 72);
       else pdf.setTextColor(100, 116, 139);
-      pdf.text(item.discipline, margin + 8, startY + 4.5);
+      pdf.text(item.discipline.slice(0, 8), margin + 7, startY + 4.5);
 
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(30, 41, 59);
-      const titleTrunc = item.title.length > 26 ? item.title.slice(0, 24) + '...' : item.title;
-      pdf.text(titleTrunc, margin + 30, startY + 4.5);
+      const titleTrunc = item.title.length > 18 ? item.title.slice(0, 16) + '...' : item.title;
+      pdf.text(titleTrunc, margin + 24, startY + 4.5);
 
-      pdf.setTextColor(51, 65, 85);
-      pdf.text(item.calculationStatus, margin + 80, startY + 4.5);
-
+      // Discrete Column 1: Calculation Status
       pdf.setFont('helvetica', 'bold');
-      if (isItemNonComp) {
+      if (item.calculationStatus === 'PASS') {
+        pdf.setTextColor(22, 101, 52);
+      } else if (item.calculationStatus === 'FAIL') {
         pdf.setTextColor(185, 28, 28);
-        pdf.text('NON-COMPLIANT', margin + 110, startY + 4.5);
+      } else if (item.calculationStatus === 'BLOCKED') {
+        pdf.setTextColor(194, 65, 12);
+      } else if (item.calculationStatus === 'INCOMPLETE') {
+        pdf.setTextColor(180, 83, 9);
+      } else if (item.calculationStatus === 'NOT_VERIFIED') {
+        pdf.setTextColor(192, 38, 211);
+      } else {
+        pdf.setTextColor(100, 116, 139);
+      }
+      pdf.text(item.calculationStatus.slice(0, 9), margin + 56, startY + 4.5);
+
+      // Discrete Column 2: Engineering Authority
+      if (item.authority === 'AUTHORITATIVE') {
+        pdf.setTextColor(22, 101, 52);
+      } else if (item.authority === 'NOT APPROVED') {
+        pdf.setTextColor(185, 28, 28);
+      } else if (item.authority === 'UNVERIFIED') {
+        pdf.setTextColor(192, 38, 211);
+      } else {
+        pdf.setTextColor(100, 116, 139);
+      }
+      pdf.text(item.authority.slice(0, 12), margin + 86, startY + 4.5);
+
+      // Discrete Column 3: Compliance Determination
+      if (item.complianceDetermination === 'NON-COMPLIANT' || isItemNonComp) {
+        pdf.setTextColor(185, 28, 28);
+        pdf.text('NON-COMPLIANT', margin + 120, startY + 4.5);
+      } else if (item.complianceDetermination === 'COMPLIANT') {
+        pdf.setTextColor(22, 101, 52);
+        pdf.text('COMPLIANT', margin + 120, startY + 4.5);
       } else {
         pdf.setTextColor(180, 83, 9);
-        pdf.text('NOT VERIFIED', margin + 110, startY + 4.5);
+        pdf.text('NOT VERIFIED', margin + 120, startY + 4.5);
       }
 
+      // Discrete Column 4: Audit Finding & Submittal Action Details
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(71, 85, 105);
-      const detailsTrunc = item.details.length > 30 ? item.details.slice(0, 28) + '...' : item.details;
-      pdf.text(detailsTrunc, margin + 140, startY + 4.5);
+      const detailsTrunc = item.details.length > 25 ? item.details.slice(0, 23) + '...' : item.details;
+      pdf.text(detailsTrunc, margin + 154, startY + 4.5);
 
       startY += 6.5;
     });
@@ -498,6 +575,19 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
   // -------------------------------------------------------------
   // CONSOLIDATED MEP CALCULATIONS INVENTORY
   // -------------------------------------------------------------
+  if (startY + 16 > pageHeight - 25) {
+    pdf.addPage();
+    pdf.setFillColor(8, 145, 178);
+    pdf.rect(0, 0, pageWidth, 4, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`PROJECT: ${project.name.toUpperCase()} (INVENTORY)`, margin, 12);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(margin, 14, pageWidth - margin, 14);
+    startY = 18;
+  }
+
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
   pdf.setTextColor(15, 23, 42);
@@ -508,13 +598,14 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
     pdf.setFillColor(15, 23, 42); // Slate-900
     pdf.rect(margin, y, contentWidth, 7, 'F');
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(8);
+    pdf.setFontSize(7);
     pdf.setTextColor(255, 255, 255);
     pdf.text('#', margin + 2, y + 4.8);
-    pdf.text('DISCIPLINE', margin + 10, y + 4.8);
-    pdf.text('CALCULATION TITLE', margin + 40, y + 4.8);
-    pdf.text('KEY SIZING / OUTPUT', margin + 105, y + 4.8);
-    pdf.text('STATUS', margin + 162, y + 4.8);
+    pdf.text('DISCIPLINE', margin + 8, y + 4.8);
+    pdf.text('CALCULATION TITLE', margin + 26, y + 4.8);
+    pdf.text('CALCULATION STATUS', margin + 74, y + 4.8);
+    pdf.text('ENGINEERING AUTHORITY', margin + 110, y + 4.8);
+    pdf.text('COMPLIANCE DETERMINATION', margin + 148, y + 4.8);
   };
 
   drawInventoryTableHeader(startY);
@@ -565,46 +656,63 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
       else if (run.tab === 'fire') pdf.setTextColor(225, 29, 72);
       else pdf.setTextColor(100, 116, 139);
 
-      pdf.text((run.tab || 'MEP').toUpperCase(), margin + 10, startY + 5.2);
+      pdf.text((run.tab || 'MEP').toUpperCase().slice(0, 9), margin + 8, startY + 5.2);
 
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(30, 41, 59);
-      const titleTrunc = run.title.length > 34 ? run.title.slice(0, 32) + '...' : run.title;
-      pdf.text(titleTrunc, margin + 40, startY + 5.2);
+      const titleTrunc = run.title.length > 28 ? run.title.slice(0, 26) + '...' : run.title;
+      pdf.text(titleTrunc, margin + 26, startY + 5.2);
 
-      pdf.setTextColor(71, 85, 105);
-      const summaryTrunc = run.summary.length > 38 ? run.summary.slice(0, 36) + '...' : run.summary;
-      pdf.text(summaryTrunc, margin + 105, startY + 5.2);
-
-      // Status Badge derived per run
+      // Distinct Columns: Calculation Status, Engineering Authority, Compliance Determination
       const runStatus = extractRunStatusInfo(run);
+
+      // 1. Calculation Status Column
       pdf.setFont('helvetica', 'bold');
       if (runStatus.isPass) {
-        if (runStatus.isNonCompliant) {
-          pdf.setTextColor(185, 28, 28); // Red-700
-          pdf.text('PASS / NON-COMPLIANT', margin + 154, startY + 5.2);
-        } else if (runStatus.isAuthoritative && runStatus.hasCompliance) {
-          pdf.setTextColor(22, 101, 52); // Emerald-800
-          pdf.text('PASS (VERIFIED)', margin + 160, startY + 5.2);
-        } else {
-          pdf.setTextColor(180, 83, 9); // Amber-700
-          pdf.text('PASS (UNVERIFIED)', margin + 156, startY + 5.2);
-        }
+        pdf.setTextColor(22, 101, 52); // Emerald-800
+        pdf.text('PASS', margin + 74, startY + 5.2);
       } else if (runStatus.isFail) {
         pdf.setTextColor(185, 28, 28); // Red-700
-        pdf.text('FAIL', margin + 160, startY + 5.2);
+        pdf.text('FAIL', margin + 74, startY + 5.2);
       } else if (runStatus.isBlocked) {
         pdf.setTextColor(194, 65, 12); // Orange-700
-        pdf.text('BLOCKED', margin + 160, startY + 5.2);
+        pdf.text('BLOCKED', margin + 74, startY + 5.2);
       } else if (runStatus.isIncomplete) {
         pdf.setTextColor(180, 83, 9); // Amber-700
-        pdf.text('INCOMPLETE', margin + 160, startY + 5.2);
+        pdf.text('INCOMPLETE', margin + 74, startY + 5.2);
       } else if (runStatus.status === 'NOT_VERIFIED') {
         pdf.setTextColor(192, 38, 211); // Fuchsia-600
-        pdf.text('NOT VERIFIED', margin + 160, startY + 5.2);
+        pdf.text('NOT VERIFIED', margin + 74, startY + 5.2);
       } else {
         pdf.setTextColor(100, 116, 139); // Slate-500
-        pdf.text(runStatus.status.slice(0, 12), margin + 160, startY + 5.2);
+        pdf.text(runStatus.status.slice(0, 12), margin + 74, startY + 5.2);
+      }
+
+      // 2. Engineering Authority Column
+      if (runStatus.isAuthoritative) {
+        pdf.setTextColor(22, 101, 52); // Emerald-800
+        pdf.text('AUTHORITATIVE', margin + 110, startY + 5.2);
+      } else if (runStatus.authorityText === 'NOT APPROVED') {
+        pdf.setTextColor(185, 28, 28); // Red-700
+        pdf.text('NOT APPROVED', margin + 110, startY + 5.2);
+      } else if (runStatus.authorityText === 'UNVERIFIED') {
+        pdf.setTextColor(192, 38, 211); // Fuchsia-600
+        pdf.text('UNVERIFIED', margin + 110, startY + 5.2);
+      } else {
+        pdf.setTextColor(100, 116, 139); // Slate-500
+        pdf.text('PRELIMINARY', margin + 110, startY + 5.2);
+      }
+
+      // 3. Compliance Determination Column
+      if (runStatus.isNonCompliant) {
+        pdf.setTextColor(185, 28, 28); // Red-700
+        pdf.text('NON-COMPLIANT', margin + 148, startY + 5.2);
+      } else if (runStatus.hasCompliance) {
+        pdf.setTextColor(22, 101, 52); // Emerald-800
+        pdf.text('COMPLIANT', margin + 148, startY + 5.2);
+      } else {
+        pdf.setTextColor(180, 83, 9); // Amber-700
+        pdf.text('NOT VERIFIED', margin + 148, startY + 5.2);
       }
 
       startY += 8;
@@ -754,49 +862,76 @@ export function exportCollectiveProjectPdf(project: ProjectContainer, runs: Hist
         pdf.text(`Engineering Notes: ${run.notes}`, margin + 4, cardY + 95);
       }
 
-      // Compliance Status Bar at Bottom of Card
+      // Distinct Status Bar at Bottom of Card: Calc Status | Authority | Compliance
       pdf.setFillColor(248, 250, 252);
       pdf.rect(margin, cardY + cardHeight - 12, contentWidth, 12, 'F');
       pdf.setDrawColor(226, 232, 240);
       pdf.line(margin, cardY + cardHeight - 12, margin + contentWidth, cardY + cardHeight - 12);
 
       const cardRunStatus = extractRunStatusInfo(run);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
+      pdf.setFontSize(7);
 
-      if (cardRunStatus.isNonCompliant) {
-        pdf.setTextColor(185, 28, 28);
-        pdf.text('✕ COMPLIANCE DETERMINATION: NON-COMPLIANT', margin + 4, cardY + cardHeight - 4.5);
-      } else if (cardRunStatus.hasCompliance) {
+      // 1. Calculation Status
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('CALCULATION STATUS:', margin + 3, cardY + cardHeight - 4.5);
+      if (cardRunStatus.isPass) {
         pdf.setTextColor(22, 101, 52);
-        pdf.text('✓ COMPLIANCE DETERMINATION: COMPLIANT', margin + 4, cardY + cardHeight - 4.5);
-      } else if (cardRunStatus.isPass) {
-        pdf.setTextColor(cardRunStatus.isAuthoritative ? 22 : 180, cardRunStatus.isAuthoritative ? 101 : 83, cardRunStatus.isAuthoritative ? 52 : 9);
-        pdf.text(cardRunStatus.isAuthoritative
-          ? '• CALCULATION STATUS: PASS (AUTHORITATIVE PRODUCTION — UNVERIFIED COMPLIANCE)'
-          : '• CALCULATION STATUS: PASS (PRELIMINARY / NON-VERIFIED AUTHORITY)',
-          margin + 4, cardY + cardHeight - 4.5);
+        pdf.text('PASS', margin + 33, cardY + cardHeight - 4.5);
       } else if (cardRunStatus.isFail) {
         pdf.setTextColor(185, 28, 28);
-        pdf.text('✕ CALCULATION STATUS: FAIL (NON-COMPLIANT / OUT OF SPEC)', margin + 4, cardY + cardHeight - 4.5);
+        pdf.text('FAIL', margin + 33, cardY + cardHeight - 4.5);
       } else if (cardRunStatus.isBlocked) {
         pdf.setTextColor(194, 65, 12);
-        pdf.text('⚠ CALCULATION STATUS: BLOCKED (PARAMETERS UNVERIFIED)', margin + 4, cardY + cardHeight - 4.5);
+        pdf.text('BLOCKED', margin + 33, cardY + cardHeight - 4.5);
       } else if (cardRunStatus.isIncomplete) {
         pdf.setTextColor(180, 83, 9);
-        pdf.text('⚠ CALCULATION STATUS: INCOMPLETE (PARAMETERS REQUIRED)', margin + 4, cardY + cardHeight - 4.5);
+        pdf.text('INCOMPLETE', margin + 33, cardY + cardHeight - 4.5);
       } else if (cardRunStatus.status === 'NOT_VERIFIED') {
         pdf.setTextColor(192, 38, 211);
-        pdf.text('⚠ CALCULATION STATUS: NOT VERIFIED (UNVERIFIED TABLES/INPUTS)', margin + 4, cardY + cardHeight - 4.5);
+        pdf.text('NOT VERIFIED', margin + 33, cardY + cardHeight - 4.5);
       } else {
-        pdf.setTextColor(71, 85, 105);
-        pdf.text(`• CALCULATION STATUS: ${cardRunStatus.status.toUpperCase()}`, margin + 4, cardY + cardHeight - 4.5);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(cardRunStatus.status.slice(0, 10), margin + 33, cardY + cardHeight - 4.5);
+      }
+
+      // 2. Engineering Authority
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('•  ENGINEERING AUTHORITY:', margin + 52, cardY + cardHeight - 4.5);
+      if (cardRunStatus.isAuthoritative) {
+        pdf.setTextColor(22, 101, 52);
+        pdf.text('AUTHORITATIVE', margin + 89, cardY + cardHeight - 4.5);
+      } else if (cardRunStatus.authorityText === 'NOT APPROVED') {
+        pdf.setTextColor(185, 28, 28);
+        pdf.text('NOT APPROVED', margin + 89, cardY + cardHeight - 4.5);
+      } else if (cardRunStatus.authorityText === 'UNVERIFIED') {
+        pdf.setTextColor(192, 38, 211);
+        pdf.text('UNVERIFIED', margin + 89, cardY + cardHeight - 4.5);
+      } else {
+        pdf.setTextColor(100, 116, 139);
+        pdf.text('PRELIMINARY', margin + 89, cardY + cardHeight - 4.5);
+      }
+
+      // 3. Compliance Determination
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('•  COMPLIANCE DETERMINATION:', margin + 114, cardY + cardHeight - 4.5);
+      if (cardRunStatus.isNonCompliant) {
+        pdf.setTextColor(185, 28, 28);
+        pdf.text('NON-COMPLIANT', margin + 156, cardY + cardHeight - 4.5);
+      } else if (cardRunStatus.hasCompliance) {
+        pdf.setTextColor(22, 101, 52);
+        pdf.text('COMPLIANT', margin + 156, cardY + cardHeight - 4.5);
+      } else {
+        pdf.setTextColor(180, 83, 9);
+        pdf.text('NOT VERIFIED', margin + 156, cardY + cardHeight - 4.5);
       }
 
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
+      pdf.setFontSize(6.5);
       pdf.setTextColor(148, 163, 184);
-      pdf.text('Trace ID: ' + run.id.slice(0, 18), pageWidth - margin - 45, cardY + cardHeight - 4.5);
+      pdf.text('ID: ' + run.id.slice(0, 8), pageWidth - margin - 18, cardY + cardHeight - 4.5);
 
       cardY += cardHeight + 8;
     });

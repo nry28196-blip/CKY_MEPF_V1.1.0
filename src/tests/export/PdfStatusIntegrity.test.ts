@@ -1463,5 +1463,260 @@ describe('Step 4B — Strict Engineering Claim, Authority & Compliance Regressio
       expect(doc).toBeDefined();
       expect(doc.getNumberOfPages()).toBe(1);
     });
+
+    it('39. extractRunStatusInfo exposes distinct calculation status, authority, and compliance determination', () => {
+      // Case A: PASS + Authoritative + NON-COMPLIANT
+      const runA: HistoryItem = {
+        id: 'run-distinct-a',
+        timestamp: '2026-10-14 12:00:00',
+        tab: 'mechanical',
+        title: 'ASHRAE 62.1 Multi-Zone VAV',
+        summary: 'Outdoor air requirement: 1400 L/s (Status: PASS)',
+        parameters: {
+          lastCalculationResult: {
+            status: 'PASS',
+            isAuthoritative: true,
+            complianceDetermination: 'NON_COMPLIANT',
+            auditRecord: {
+              authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+              finalResult: { isAuthoritative: true, complianceDetermination: 'NON_COMPLIANT' }
+            }
+          }
+        }
+      };
+
+      const statusA = extractRunStatusInfo(runA);
+      expect(statusA.status).toBe('PASS');
+      expect(statusA.isAuthoritative).toBe(true);
+      expect(statusA.authorityText).toBe('AUTHORITATIVE');
+      expect(statusA.complianceText).toBe('NON-COMPLIANT');
+      expect(statusA.hasCompliance).toBe(false);
+
+      // Case B: PASS + Preliminary (No Authority Policy) + NOT VERIFIED
+      const runB: HistoryItem = {
+        id: 'run-distinct-b',
+        timestamp: '2026-10-14 12:05:00',
+        tab: 'plumbing',
+        title: 'Water Pipe Sizing Preliminary',
+        summary: 'Total flow: 45 GPM (Status: PASS)',
+        parameters: {
+          lastCalculationResult: {
+            status: 'PASS',
+            isAuthoritative: false
+          }
+        }
+      };
+
+      const statusB = extractRunStatusInfo(runB);
+      expect(statusB.status).toBe('PASS');
+      expect(statusB.isAuthoritative).toBe(false);
+      expect(statusB.authorityText).toBe('PRELIMINARY');
+      expect(statusB.complianceText).toBe('NOT VERIFIED');
+      expect(statusB.hasCompliance).toBe(false);
+
+      // Case C: FAIL + Not Approved + NOT VERIFIED
+      const runC: HistoryItem = {
+        id: 'run-distinct-c',
+        timestamp: '2026-10-14 12:10:00',
+        tab: 'mechanical',
+        title: 'Exhaust Fan Selection',
+        summary: 'Pressure drop exceeds allowable (Status: FAIL)',
+        parameters: {
+          lastCalculationResult: {
+            status: 'FAIL',
+            isAuthoritative: false
+          }
+        }
+      };
+
+      const statusC = extractRunStatusInfo(runC);
+      expect(statusC.status).toBe('FAIL');
+      expect(statusC.isAuthoritative).toBe(false);
+      expect(statusC.authorityText).toBe('NOT APPROVED');
+      expect(statusC.complianceText).toBe('NOT VERIFIED');
+      expect(statusC.hasCompliance).toBe(false);
+
+      // Case D: PASS + Authoritative + COMPLIANT
+      const runD: HistoryItem = {
+        id: 'run-distinct-d',
+        timestamp: '2026-10-14 12:15:00',
+        tab: 'mechanical',
+        title: 'Zone Single-Path Outdoor Air',
+        summary: 'Design satisfied (Status: PASS)',
+        parameters: {
+          lastCalculationResult: {
+            status: 'PASS',
+            isAuthoritative: true,
+            complianceDetermination: 'COMPLIANT',
+            auditRecord: {
+              authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+              finalResult: { isAuthoritative: true, complianceDetermination: 'COMPLIANT' }
+            }
+          }
+        }
+      };
+
+      const statusD = extractRunStatusInfo(runD);
+      expect(statusD.status).toBe('PASS');
+      expect(statusD.isAuthoritative).toBe(true);
+      expect(statusD.authorityText).toBe('AUTHORITATIVE');
+      expect(statusD.complianceText).toBe('COMPLIANT');
+      expect(statusD.hasCompliance).toBe(true);
+    });
+
+    it('40. exportCollectiveProjectPdf renders submittal with distinct columns for multi-discipline run set', () => {
+      const runs: HistoryItem[] = [
+        {
+          id: 'pdf-distinct-1',
+          timestamp: '2026-10-14 12:30:00',
+          tab: 'mechanical',
+          title: 'VAV Air Distribution',
+          summary: 'Primary Air: 3500 CFM',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'COMPLIANT',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'COMPLIANT' }
+              }
+            }
+          }
+        },
+        {
+          id: 'pdf-distinct-2',
+          timestamp: '2026-10-14 12:35:00',
+          tab: 'plumbing',
+          title: 'Storm Drainage Sizing',
+          summary: 'Roof area 15000 sq ft',
+          parameters: {
+            status: 'PASS',
+            isAuthoritative: false
+          }
+        },
+        {
+          id: 'pdf-distinct-3',
+          timestamp: '2026-10-14 12:40:00',
+          tab: 'electrical',
+          title: 'Emergency Generator Sizing',
+          summary: 'Capacity: 250 kW',
+          parameters: {
+            status: 'FAIL'
+          }
+        }
+      ];
+
+      const doc = exportCollectiveProjectPdf(mockProject, runs);
+      expect(doc).toBeDefined();
+      expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(2);
+    });
+
+    it('41. enforce distinct columns for Calculation Status, Engineering Authority, and Compliance Determination in each row', () => {
+      const runs: HistoryItem[] = [
+        {
+          id: 'distinct-row-1',
+          timestamp: '2026-10-14 13:00:00',
+          tab: 'mechanical',
+          title: 'VAV Supply Air System',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'COMPLIANT',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'COMPLIANT' }
+              }
+            }
+          }
+        },
+        {
+          id: 'distinct-row-2',
+          timestamp: '2026-10-14 13:05:00',
+          tab: 'mechanical',
+          title: 'Chilled Water Distribution',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: true,
+              complianceDetermination: 'NON_COMPLIANT',
+              auditRecord: {
+                authorityPolicy: 'AUTHORITATIVE_PRODUCTION',
+                finalResult: { isAuthoritative: true, complianceDetermination: 'NON_COMPLIANT' }
+              }
+            }
+          }
+        },
+        {
+          id: 'distinct-row-3',
+          timestamp: '2026-10-14 13:10:00',
+          tab: 'plumbing',
+          title: 'Domestic Hot Water Loop',
+          summary: 'Status: FAIL',
+          parameters: {
+            lastCalculationResult: {
+              status: 'FAIL',
+              isAuthoritative: false
+            }
+          }
+        },
+        {
+          id: 'distinct-row-4',
+          timestamp: '2026-10-14 13:15:00',
+          tab: 'electrical',
+          title: 'Lighting Power Density',
+          summary: 'Status: PASS',
+          parameters: {
+            lastCalculationResult: {
+              status: 'PASS',
+              isAuthoritative: false
+            }
+          }
+        }
+      ];
+
+      // Verify aggregation produces distinct, structured fields for each row
+      const summary = aggregateComplianceFlags(runs);
+      expect(summary.attentionItems.length).toBeGreaterThan(0);
+
+      // Verify each attention item contains structured discrete columns
+      summary.attentionItems.forEach(item => {
+        expect(typeof item.calculationStatus).toBe('string');
+        expect(typeof item.authority).toBe('string');
+        expect(typeof item.complianceDetermination).toBe('string');
+        expect(item.calculationStatus.length).toBeGreaterThan(0);
+        expect(item.authority.length).toBeGreaterThan(0);
+        expect(item.complianceDetermination.length).toBeGreaterThan(0);
+      });
+
+      // Verify individual run status extraction ensures structured, distinct column data
+      const s1 = extractRunStatusInfo(runs[0]);
+      expect(s1.status).toBe('PASS');
+      expect(s1.authorityText).toBe('AUTHORITATIVE');
+      expect(s1.complianceText).toBe('COMPLIANT');
+
+      const s2 = extractRunStatusInfo(runs[1]);
+      expect(s2.status).toBe('PASS');
+      expect(s2.authorityText).toBe('AUTHORITATIVE');
+      expect(s2.complianceText).toBe('NON-COMPLIANT');
+
+      const s3 = extractRunStatusInfo(runs[2]);
+      expect(s3.status).toBe('FAIL');
+      expect(s3.authorityText).toBe('NOT APPROVED');
+      expect(s3.complianceText).toBe('NOT VERIFIED');
+
+      const s4 = extractRunStatusInfo(runs[3]);
+      expect(s4.status).toBe('PASS');
+      expect(s4.authorityText).toBe('PRELIMINARY');
+      expect(s4.complianceText).toBe('NOT VERIFIED');
+
+      // Verify full PDF compilation succeeds cleanly
+      const doc = exportCollectiveProjectPdf(mockProject, runs);
+      expect(doc).toBeDefined();
+      expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(3);
+    });
   });
 });
